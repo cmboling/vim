@@ -11,9 +11,10 @@ SET TOOLDIR=D:\
 set opts=
 set opts=%opts% %1
 
-set opts=%opts% PERL=C:\Perl
-REM set opts=%opts% DYNAMIC_PERL=yes
-set opts=%opts% PERL_VER=58
+REM set opts=%opts% PERL=C:\Perl
+set opts=%opts% PERL=C:\Users\apoplavskiy\programs\perl\strawberry_522_32bit\perl
+set opts=%opts% DYNAMIC_PERL=yes
+set opts=%opts% PERL_VER=522
 
 set opts=%opts% GUI=yes
 set opts=%opts% OLE=yes
