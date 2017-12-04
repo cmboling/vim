@@ -1,7 +1,7 @@
 " Vim support file to detect file types
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2017 Nov 11
+" Last Change:	2017 Nov 23
 
 " Listen very carefully, I will say this only once
 if exists("did_load_filetypes")
@@ -231,10 +231,10 @@ au BufNewFile,BufRead *.bl			setf blank
 au BufNewFile,BufRead */etc/blkid.tab,*/etc/blkid.tab.old   setf xml
 
 " Bazel (http://bazel.io)
-autocmd BufRead,BufNewFile *.bzl,WORKSPACE 	setf bzl
+autocmd BufRead,BufNewFile *.bzl,WORKSPACE,BUILD.bazel 	setf bzl
 if has("fname_case")
   " There is another check for BUILD further below.
-  autocmd BufRead,BufNewFile BUILD		setf bzl
+  autocmd BufRead,BufNewFile BUILD			setf bzl
 endif
 
 " C or lpc
@@ -1878,8 +1878,8 @@ au BufNewFile,BufRead *.yy,*.yxx,*.y++		setf yacc
 " Yacc or racc
 au BufNewFile,BufRead *.y			call dist#ft#FTy()
 
-" Yaml
-au BufNewFile,BufRead *.yaml,*.yml		setf yaml
+" Yaml or Raml
+au BufNewFile,BufRead *.yaml,*.yml,*.raml	setf yaml
 
 " yum conf (close enough to dosini)
 au BufNewFile,BufRead */etc/yum.conf		setf dosini
