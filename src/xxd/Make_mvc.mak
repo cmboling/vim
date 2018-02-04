@@ -1,5 +1,8 @@
 # The most simplistic Makefile for Win32 using Microsoft Visual C++
 # (NT and Windows 95)
+#
+NOLOGO=
+#NOLOGO=/nologo
 
 SUBSYSTEM = console
 !if "$(SUBSYSTEM_VER)" != ""
@@ -9,10 +12,10 @@ SUBSYSTEM = $(SUBSYSTEM),$(SUBSYSTEM_VER)
 xxd: xxd.exe
 
 xxd.exe: xxd.c
-	cl /nologo -DWIN32 xxd.c -link -subsystem:$(SUBSYSTEM)
+	cl $(NOLOGO) -DWIN32 xxd.c -link -subsystem:$(SUBSYSTEM)
 
 # This was for an older compiler
-#    cl /nologo -DWIN32 xxd.c /link setargv.obj
+#    cl $(NOLOGO) -DWIN32 xxd.c /link setargv.obj
 
 clean:
 	- if exist xxd.obj del xxd.obj

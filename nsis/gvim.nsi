@@ -12,19 +12,19 @@
 
 # Location of runtime files
 !ifndef VIMRT
-  !define VIMRT ".."
+  !define VIMRT "..\runtime"
 !endif
 
 # Location of extra tools: diff.exe
 !ifndef VIMTOOLS
-  !define VIMTOOLS ..\..
+  !define VIMTOOLS .\assets\vim_tools
 !endif
 
 # Location of gettext.
 # It must contain two directories: gettext32 and gettext64.
 # See README.txt for detail.
 !ifndef GETTEXT
-  !define GETTEXT ${VIMRT}
+  !define GETTEXT .\assets\gettext
 !endif
 
 # Comment the next line if you don't have UPX.
@@ -32,7 +32,7 @@
 !define HAVE_UPX
 
 # comment the next line if you do not want to add Native Language Support
-!define HAVE_NLS
+#!define HAVE_NLS
 
 !include gvim_version.nsh	# for version number
 
@@ -63,7 +63,8 @@ UninstallIcon icons\vim_uninst_16c.ico
 # with the BringToFront.
 # BGGradient 004000 008200 FFFFFF
 LicenseText "You should read the following before installing:"
-LicenseData ${VIMRT}\doc\uganda.nsis.txt
+#LicenseData ${VIMRT}\doc\uganda.nsis.txt
+LicenseData uganda.nsis.txt
 
 !ifdef HAVE_UPX
   !packhdr temp.dat "upx --best --compress-icons=1 temp.dat"
@@ -197,7 +198,7 @@ Section "Vim executables and runtime files"
 	StrCpy $0 "$INSTDIR\vim${VER_MAJOR}${VER_MINOR}"
 
 	SetOutPath $0
-	File /oname=gvim.exe ${VIMSRC}\gvim_ole.exe
+	File /oname=gvim.exe ${VIMSRC}\gvim.exe
 	File /oname=install.exe ${VIMSRC}\installw32.exe
 	File /oname=uninstal.exe ${VIMSRC}\uninstalw32.exe
 	File ${VIMSRC}\vimrun.exe
@@ -344,32 +345,32 @@ Section "Add an Edit-with-Vim context menu entry"
 	ClearErrors
 	SetOverwrite try
 
-	${If} ${RunningX64}
-	  # Install 64-bit gvimext.dll into the GvimExt64 directory.
-	  SetOutPath $0\GvimExt64
-	  ClearErrors
-	  File /oname=gvimext.dll ${VIMSRC}\GvimExt\gvimext64.dll
-!ifdef HAVE_NLS
-	  File ${GETTEXT}\gettext64\libintl-8.dll
-	  File ${GETTEXT}\gettext64\libiconv-2.dll
-!endif
-
-	  IfErrors 0 GvimExt64Done
-
-	  # Can't copy gvimext.dll, create it under another name and rename it
-	  # on next reboot.
-	  GetTempFileName $3 $0\GvimExt64
-	  File /oname=$3 ${VIMSRC}\GvimExt\gvimext64.dll
-	  Rename /REBOOTOK $3 $0\GvimExt64\gvimext.dll
-!ifdef HAVE_NLS
-	  GetTempFileName $3 $0\GvimExt64
-	  File /oname=$3 ${GETTEXT}\gettext64\libintl-8.dll
-	  Rename /REBOOTOK $3 $0\GvimExt64\libintl-8.dll
-	  GetTempFileName $3 $0\GvimExt64
-	  File /oname=$3 ${GETTEXT}\gettext64\libiconv-2.dll
-	  Rename /REBOOTOK $3 $0\GvimExt64\libiconv-2.dll
-!endif
-	${EndIf}
+#	${If} ${RunningX64}
+#	  # Install 64-bit gvimext.dll into the GvimExt64 directory.
+#	  SetOutPath $0\GvimExt64
+#	  ClearErrors
+#	  File /oname=gvimext.dll ${VIMSRC}\GvimExt\gvimext64.dll
+#!ifdef HAVE_NLS
+#	  File ${GETTEXT}\gettext64\libintl-8.dll
+#	  File ${GETTEXT}\gettext64\libiconv-2.dll
+#!endif
+#
+#	  IfErrors 0 GvimExt64Done
+#
+#	  # Can't copy gvimext.dll, create it under another name and rename it
+#	  # on next reboot.
+#	  GetTempFileName $3 $0\GvimExt64
+#	  File /oname=$3 ${VIMSRC}\GvimExt\gvimext64.dll
+#	  Rename /REBOOTOK $3 $0\GvimExt64\gvimext.dll
+#!ifdef HAVE_NLS
+#	  GetTempFileName $3 $0\GvimExt64
+#	  File /oname=$3 ${GETTEXT}\gettext64\libintl-8.dll
+#	  Rename /REBOOTOK $3 $0\GvimExt64\libintl-8.dll
+#	  GetTempFileName $3 $0\GvimExt64
+#	  File /oname=$3 ${GETTEXT}\gettext64\libiconv-2.dll
+#	  Rename /REBOOTOK $3 $0\GvimExt64\libiconv-2.dll
+#!endif
+#	${EndIf}
 
 	GvimExt64Done:
 

@@ -155,12 +155,12 @@
 #	    i) Pass Make_dvc.mak to the IDE.
 #		 Use the "open workspace" menu entry to load Make_dvc.mak.
 #		 Alternatively, from the command line:
-#			msdev /nologo Make_dvc.mak
+#			msdev $(NOLOGO) Make_dvc.mak
 #		Note: Make_dvc.mak is in VC4.0 format. Later VC versions see
 #		this and offer to convert it to their own format. Accept that.
 #		It creates a file called Make_dvc.dsw which can then be used
 #		for further operations.  E.g.
-#		    msdev /nologo Make_dvc.dsw
+#		    msdev $(NOLOGO) Make_dvc.dsw
 #	    ii) Set the built executable for debugging:
 #		a) Alt+F7/Debug takes you to the Debug dialog.
 #		b) Fill "Executable for debug session". e.g. gvimd.exe
@@ -179,6 +179,13 @@
 # Build on Windows NT/XP
 
 TARGETOS = WINNT
+#NOLOGO=/nologo
+#NOLOGOBIG=/NOLOGO
+#OPT_NOLOGO=-nologo
+
+NOLOGO=
+NOLOGOBIG=
+OPT_NOLOGO=
 
 # Select one of eight object code directories, depends on GUI, OLE, DEBUG and
 # interfaces.
@@ -502,7 +509,7 @@ WINVER = 0x0501
 #VIMRCLOC = somewhere
 #VIMRUNTIMEDIR = somewhere
 
-CFLAGS = -c /W3 /nologo $(CVARS) -I. -Iproto -DHAVE_PATHDEF -DWIN32 \
+CFLAGS = -c /W3 $(NOLOGO) $(CVARS) -I. -Iproto -DHAVE_PATHDEF -DWIN32 \
 		$(CSCOPE_DEFS) $(TERM_DEFS) $(NETBEANS_DEFS) $(CHANNEL_DEFS) \
 		$(NBDEBUG_DEFS) $(XPM_DEFS) \
 		$(DEFINES) -DWINVER=$(WINVER) -D_WIN32_WINNT=$(WINVER)
@@ -1153,7 +1160,7 @@ LINK_PDB = /PDB:$(VIM).pdb -debug
 # CFLAGS with /Fo$(OUTDIR)/
 CFLAGS_OUTDIR=$(CFLAGS) /Fo$(OUTDIR)/
 
-conflags = /nologo /subsystem:$(SUBSYSTEM)
+conflags = $(NOLOGO) /subsystem:$(SUBSYSTEM)
 
 PATHDEF_SRC = $(OUTDIR)\pathdef.c
 
@@ -1196,7 +1203,7 @@ $(VIM).exe: $(OUTDIR) $(OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ) $(OLE_IDL) $(MZSCH
 		$(LUA_OBJ) $(MZSCHEME_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ) \
 		$(TCL_OBJ) $(CSCOPE_OBJ) $(TERM_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ) \
 		$(XPM_OBJ) $(OUTDIR)\version.obj $(LINKARGS2)
-	if exist $(VIM).exe.manifest mt.exe -nologo -manifest $(VIM).exe.manifest -updateresource:$(VIM).exe;1
+	if exist $(VIM).exe.manifest mt.exe $(OPT_NOLOGO) -manifest $(VIM).exe.manifest -updateresource:$(VIM).exe;1
 
 $(VIM): $(VIM).exe
 
@@ -1204,32 +1211,32 @@ $(OUTDIR):
 	if not exist $(OUTDIR)/nul  mkdir $(OUTDIR)
 
 install.exe: dosinst.c
-	$(CC) /nologo -DNDEBUG -DWIN32 dosinst.c kernel32.lib shell32.lib \
+	$(CC) $(NOLOGO) -DNDEBUG -DWIN32 dosinst.c kernel32.lib shell32.lib \
 		user32.lib ole32.lib advapi32.lib uuid.lib \
 		-link -subsystem:$(SUBSYSTEM_TOOLS)
 	- if exist install.exe del install.exe
 	ren dosinst.exe install.exe
 
 uninstal.exe: uninstal.c
-	$(CC) /nologo -DNDEBUG -DWIN32 uninstal.c shell32.lib advapi32.lib \
+	$(CC) $(NOLOGO) -DNDEBUG -DWIN32 uninstal.c shell32.lib advapi32.lib \
 		-link -subsystem:$(SUBSYSTEM_TOOLS)
 
 vimrun.exe: vimrun.c
-	$(CC) /nologo -DNDEBUG vimrun.c -link -subsystem:$(SUBSYSTEM_TOOLS)
+	$(CC) $(NOLOGO) -DNDEBUG vimrun.c -link -subsystem:$(SUBSYSTEM_TOOLS)
 
 xxd/xxd.exe: xxd/xxd.c
 	cd xxd
-	$(MAKE) /NOLOGO -f Make_mvc.mak $(MAKEFLAGS_TOOLS)
+	$(MAKE) $(NOLOGOBIG) -f Make_mvc.mak $(MAKEFLAGS_TOOLS)
 	cd ..
 
 tee/tee.exe: tee/tee.c
 	cd tee
-	$(MAKE) /NOLOGO -f Make_mvc.mak $(MAKEFLAGS_TOOLS)
+	$(MAKE) $(NOLOGOBIG) -f Make_mvc.mak $(MAKEFLAGS_TOOLS)
 	cd ..
 
 GvimExt/gvimext.dll: GvimExt/gvimext.cpp GvimExt/gvimext.rc GvimExt/gvimext.h
 	cd GvimExt
-	$(MAKE) /NOLOGO -f Makefile $(MAKEFLAGS_GVIMEXT)
+	$(MAKE) $(NOLOGOBIG) -f Makefile $(MAKEFLAGS_GVIMEXT)
 	cd ..
 
 
@@ -1256,29 +1263,29 @@ clean:
 	- if exist dimm.tlb del dimm.tlb
 	- if exist dosinst.exe del dosinst.exe
 	cd xxd
-	$(MAKE) /NOLOGO -f Make_mvc.mak clean
+	$(MAKE) $(NOLOGOBIG) -f Make_mvc.mak clean
 	cd ..
 	cd tee
-	$(MAKE) /NOLOGO -f Make_mvc.mak clean
+	$(MAKE) $(NOLOGOBIG) -f Make_mvc.mak clean
 	cd ..
 	cd GvimExt
-	$(MAKE) /NOLOGO -f Makefile clean
+	$(MAKE) $(NOLOGOBIG) -f Makefile clean
 	cd ..
 	- if exist testdir\*.out del testdir\*.out
 
 test:
 	cd testdir
-	$(MAKE) /NOLOGO -f Make_dos.mak win32
+	$(MAKE) $(NOLOGOBIG) -f Make_dos.mak win32
 	cd ..
 
 testgvim:
 	cd testdir
-	$(MAKE) /NOLOGO -f Make_dos.mak VIMPROG=..\gvim win32
+	$(MAKE) $(NOLOGOBIG) -f Make_dos.mak VIMPROG=..\gvim win32
 	cd ..
 
 testclean:
 	cd testdir
-	$(MAKE) /NOLOGO -f Make_dos.mak clean
+	$(MAKE) $(NOLOGOBIG) -f Make_dos.mak clean
 	cd ..
 
 ###########################################################################
@@ -1479,14 +1486,14 @@ $(OUTDIR)/xpm_w32.obj: $(OUTDIR) xpm_w32.c
 $(OUTDIR)/vim.res:	$(OUTDIR) vim.rc gvim.exe.mnf version.h tools.bmp \
 				tearoff.bmp vim.ico vim_error.ico \
 				vim_alert.ico vim_info.ico vim_quest.ico
-	$(RC) /nologo /l 0x409 /Fo$(OUTDIR)/vim.res $(RCFLAGS) vim.rc
+	$(RC)  /l 0x409 /Fo$(OUTDIR)/vim.res $(RCFLAGS) vim.rc
 
 iid_ole.c if_ole.h vim.tlb: if_ole.idl
-	midl /nologo /error none /proxy nul /iid iid_ole.c /tlb vim.tlb \
+	midl $(NOLOGO) /error none /proxy nul /iid iid_ole.c /tlb vim.tlb \
 		/header if_ole.h if_ole.idl
 
 dimm.h dimm_i.c: dimm.idl
-	midl /nologo /error none /proxy nul dimm.idl
+	midl $(NOLOGO) /error none /proxy nul dimm.idl
 
 $(OUTDIR)/dimm_i.obj: $(OUTDIR) dimm_i.c $(INCL)
 
