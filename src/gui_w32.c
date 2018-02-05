@@ -30,10 +30,13 @@
 #endif
 
 #if defined(FEAT_DIRECTX)
+# ifndef FEAT_MBYTE
+#  error FEAT_MBYTE is required for FEAT_DIRECTX.
+# endif
 static DWriteContext *s_dwc = NULL;
 static int s_directx_enabled = 0;
 static int s_directx_load_attempted = 0;
-# define IS_ENABLE_DIRECTX() (s_directx_enabled && s_dwc != NULL)
+# define IS_ENABLE_DIRECTX() (s_directx_enabled && s_dwc != NULL && enc_utf8)
 static int directx_enabled(void);
 static void directx_binddc(void);
 #endif
@@ -46,7 +49,7 @@ static int gui_mswin_get_menu_height(int fix_window);
     int
 gui_mch_set_rendering_options(char_u *s)
 {
-#ifdef FEAT_DIRECTX
+# ifdef FEAT_DIRECTX
     char_u  *p, *q;
 
     int	    dx_enable = 0;
@@ -117,9 +120,16 @@ gui_mch_set_rendering_options(char_u *s)
 	    if (dx_taamode < 0 || dx_taamode > 3)
 		return FAIL;
 	}
+	else if (STRCMP(name, "scrlines") == 0)
+	{
+	    /* Deprecated.  Simply ignore it. */
+	}
 	else
 	    return FAIL;
     }
+
+    if (!gui.in_use)
+	return OK;  /* only checking the syntax of the value */
 
     /* Enable DirectX/DirectWrite */
     if (dx_enable)
@@ -149,9 +159,9 @@ gui_mch_set_rendering_options(char_u *s)
     s_directx_enabled = dx_enable;
 
     return OK;
-#else
+# else
     return FAIL;
-#endif
+# endif
 }
 #endif
 
@@ -283,6 +293,7 @@ typedef int UINT_PTR;
 #endif
 
 static void _OnPaint( HWND hwnd);
+static void fill_rect(const RECT *rcp, HBRUSH hbr, COLORREF color);
 static void clear_rect(RECT *rcp);
 
 static WORD		s_dlgfntheight;		/* height of the dialog font */
@@ -605,10 +616,7 @@ _OnBlinkTimer(
 	blink_timer = (UINT) SetTimer(NULL, 0, (UINT)blink_ontime,
 						    (TIMERPROC)_OnBlinkTimer);
     }
-#if defined(FEAT_DIRECTX)
-    if (IS_ENABLE_DIRECTX())
-	DWriteContext_Flush(s_dwc);
-#endif
+    gui_mch_flush();
 }
 
     static void
@@ -630,11 +638,14 @@ gui_mswin_rm_blink_timer(void)
  * Stop the cursor blinking.  Show the cursor if it wasn't shown.
  */
     void
-gui_mch_stop_blink(void)
+gui_mch_stop_blink(int may_call_gui_update_cursor)
 {
     gui_mswin_rm_blink_timer();
-    if (blink_state == BLINK_OFF)
+    if (blink_state == BLINK_OFF && may_call_gui_update_cursor)
+    {
 	gui_update_cursor(TRUE, FALSE);
+	gui_mch_flush();
+    }
     blink_state = BLINK_NONE;
 }
 
@@ -654,6 +665,7 @@ gui_mch_start_blink(void)
 						    (TIMERPROC)_OnBlinkTimer);
 	blink_state = BLINK_ON;
 	gui_update_cursor(TRUE, FALSE);
+	gui_mch_flush();
     }
 }
 
@@ -1730,7 +1742,6 @@ gui_mch_draw_part_cursor(
     int		h,
     guicolor_T	color)
 {
-    HBRUSH	hbr;
     RECT	rc;
 
     /*
@@ -1746,14 +1757,7 @@ gui_mch_draw_part_cursor(
     rc.right = rc.left + w;
     rc.bottom = rc.top + h;
 
-#if defined(FEAT_DIRECTX)
-    if (IS_ENABLE_DIRECTX())
-	DWriteContext_Flush(s_dwc);
-#endif
-
-    hbr = CreateSolidBrush(color);
-    FillRect(s_hdc, &rc, hbr);
-    DeleteBrush(hbr);
+    fill_rect(&rc, NULL, color);
 }
 
 
@@ -2107,7 +2111,7 @@ gui_mch_wait_for_chars(int wtime)
 	    if (gui.in_focus)
 		gui_mch_start_blink();
 	    else
-		gui_mch_stop_blink();
+		gui_mch_stop_blink(TRUE);
 	    focus = gui.in_focus;
 	}
 
@@ -3123,23 +3127,26 @@ gui_mch_delete_lines(
 {
     RECT	rc;
 
-    intel_gpu_workaround();
-
-#if defined(FEAT_DIRECTX)
-    // Commit drawing queue before ScrollWindowEx.
-    if (IS_ENABLE_DIRECTX())
-	DWriteContext_Flush(s_dwc);
-#endif
-
     rc.left = FILL_X(gui.scroll_region_left);
     rc.right = FILL_X(gui.scroll_region_right + 1);
     rc.top = FILL_Y(row);
     rc.bottom = FILL_Y(gui.scroll_region_bot + 1);
 
-    ScrollWindowEx(s_textArea, 0, -num_lines * gui.char_height,
+#if defined(FEAT_DIRECTX)
+    if (IS_ENABLE_DIRECTX())
+    {
+	DWriteContext_Scroll(s_dwc, 0, -num_lines * gui.char_height, &rc);
+	DWriteContext_Flush(s_dwc);
+    }
+    else
+#endif
+    {
+	intel_gpu_workaround();
+	ScrollWindowEx(s_textArea, 0, -num_lines * gui.char_height,
 				    &rc, &rc, NULL, NULL, get_scroll_flags());
+	UpdateWindow(s_textArea);
+    }
 
-    UpdateWindow(s_textArea);
     /* This seems to be required to avoid the cursor disappearing when
      * scrolling such that the cursor ends up in the top-left character on
      * the screen...   But why?  (Webb) */
@@ -3162,24 +3169,27 @@ gui_mch_insert_lines(
 {
     RECT	rc;
 
-    intel_gpu_workaround();
-
-#if defined(FEAT_DIRECTX)
-    // Commit drawing queue before ScrollWindowEx.
-    if (IS_ENABLE_DIRECTX())
-	DWriteContext_Flush(s_dwc);
-#endif
-
     rc.left = FILL_X(gui.scroll_region_left);
     rc.right = FILL_X(gui.scroll_region_right + 1);
     rc.top = FILL_Y(row);
     rc.bottom = FILL_Y(gui.scroll_region_bot + 1);
-    /* The SW_INVALIDATE is required when part of the window is covered or
-     * off-screen.  How do we avoid it when it's not needed? */
-    ScrollWindowEx(s_textArea, 0, num_lines * gui.char_height,
-				    &rc, &rc, NULL, NULL, get_scroll_flags());
 
-    UpdateWindow(s_textArea);
+#if defined(FEAT_DIRECTX)
+    if (IS_ENABLE_DIRECTX())
+    {
+	DWriteContext_Scroll(s_dwc, 0, num_lines * gui.char_height, &rc);
+	DWriteContext_Flush(s_dwc);
+    }
+    else
+#endif
+    {
+	intel_gpu_workaround();
+	/* The SW_INVALIDATE is required when part of the window is covered or
+	 * off-screen.  How do we avoid it when it's not needed? */
+	ScrollWindowEx(s_textArea, 0, num_lines * gui.char_height,
+				    &rc, &rc, NULL, NULL, get_scroll_flags());
+	UpdateWindow(s_textArea);
+    }
 
     gui_clear_block(row, gui.scroll_region_left,
 				row + num_lines - 1, gui.scroll_region_right);
@@ -3993,7 +4003,10 @@ _OnScroll(
      * position, but don't actually scroll by setting "dont_scroll". */
     dont_scroll = !allow_scrollbar;
 
+    mch_disable_flush();
     gui_drag_scrollbar(sb, val, dragging);
+    mch_enable_flush();
+    gui_may_flush();
 
     s_busy_processing = FALSE;
     dont_scroll = dont_scroll_save;
@@ -4620,6 +4633,7 @@ _OnMouseWheel(
     if (mouse_scroll_lines == 0)
 	init_mouse_wheel();
 
+    mch_disable_flush();
     if (mouse_scroll_lines > 0
 	    && mouse_scroll_lines < (size > 2 ? size - 2 : 1))
     {
@@ -4628,6 +4642,8 @@ _OnMouseWheel(
     }
     else
 	_OnScroll(hwnd, hwndCtl, zDelta >= 0 ? SB_PAGEUP : SB_PAGEDOWN, 0);
+    mch_enable_flush();
+    gui_may_flush();
 }
 
 #ifdef USE_SYSMENU_FONT
@@ -5853,6 +5869,7 @@ _OnImeNotify(HWND hWnd, DWORD dwCommand, DWORD dwData UNUSED)
 		}
 	    }
 	    gui_update_cursor(TRUE, FALSE);
+	    gui_mch_flush();
 	    lResult = 0;
 	    break;
     }
@@ -6181,6 +6198,67 @@ RevOut( HDC s_hdc,
 }
 #endif
 
+    static void
+draw_line(
+    int		x1,
+    int	    	y1,
+    int	    	x2,
+    int	    	y2,
+    COLORREF	color)
+{
+#if defined(FEAT_DIRECTX)
+    if (IS_ENABLE_DIRECTX())
+	DWriteContext_DrawLine(s_dwc, x1, y1, x2, y2, color);
+    else
+#endif
+    {
+	HPEN	hpen = CreatePen(PS_SOLID, 1, color);
+	HPEN	old_pen = SelectObject(s_hdc, hpen);
+	MoveToEx(s_hdc, x1, y1, NULL);
+	/* Note: LineTo() excludes the last pixel in the line. */
+	LineTo(s_hdc, x2, y2);
+	DeleteObject(SelectObject(s_hdc, old_pen));
+    }
+}
+
+    static void
+set_pixel(
+    int		x,
+    int	    	y,
+    COLORREF	color)
+{
+#if defined(FEAT_DIRECTX)
+    if (IS_ENABLE_DIRECTX())
+	DWriteContext_SetPixel(s_dwc, x, y, color);
+    else
+#endif
+	SetPixel(s_hdc, x, y, color);
+}
+
+    static void
+fill_rect(
+    const RECT	*rcp,
+    HBRUSH    	hbr,
+    COLORREF	color)
+{
+#if defined(FEAT_DIRECTX)
+    if (IS_ENABLE_DIRECTX())
+	DWriteContext_FillRect(s_dwc, rcp, color);
+    else
+#endif
+    {
+	HBRUSH	hbr2;
+
+	if (hbr == NULL)
+	    hbr2 = CreateSolidBrush(color);
+	else
+	    hbr2 = hbr;
+	FillRect(s_hdc, rcp, hbr2);
+	if (hbr == NULL)
+	    DeleteBrush(hbr2);
+    }
+}
+
     void
 gui_mch_draw_string(
     int		row,
@@ -6200,7 +6278,6 @@ gui_mch_draw_string(
     static int	unibuflen = 0;
     int		n = 0;
 #endif
-    HPEN	hpen, old_pen;
     int		y;
 
     /*
@@ -6263,11 +6340,7 @@ gui_mch_draw_string(
 	    brush_lru = !brush_lru;
 	}
 
-#if defined(FEAT_DIRECTX)
-	if (IS_ENABLE_DIRECTX())
-	    DWriteContext_FillRect(s_dwc, &rc, gui.currBgColor);
-#endif
-	FillRect(s_hdc, &rc, hbr);
+	fill_rect(&rc, hbr, gui.currBgColor);
 
 	SetBkMode(s_hdc, TRANSPARENT);
 
@@ -6317,13 +6390,13 @@ gui_mch_draw_string(
 	    if (text[n] >= 0x80)
 		break;
 
-#if defined(FEAT_DIRECTX)
+# if defined(FEAT_DIRECTX)
     /* Quick hack to enable DirectWrite.  To use DirectWrite (antialias), it is
      * required that unicode drawing routine, currently.  So this forces it
      * enabled. */
-    if (enc_utf8 && IS_ENABLE_DIRECTX())
+    if (IS_ENABLE_DIRECTX())
 	n = 0; /* Keep n < len, to enter block for unicode. */
-#endif
+# endif
 
     /* Check if the Unicode buffer exists and is big enough.  Create it
      * with the same length as the multi-byte string, the number of wide
@@ -6396,7 +6469,7 @@ gui_mch_draw_string(
 	    i += utf_ptr2len_len(text + i, len - i);
 	    ++clen;
 	}
-#if defined(FEAT_DIRECTX)
+# if defined(FEAT_DIRECTX)
 	if (IS_ENABLE_DIRECTX())
 	{
 	    /* Add one to "cells" for italics. */
@@ -6406,7 +6479,7 @@ gui_mch_draw_string(
 		    foptions, pcliprect, unicodepdy);
 	}
 	else
-#endif
+# endif
 	    ExtTextOutW(s_hdc, TEXT_X(col), TEXT_Y(row),
 		    foptions, pcliprect, unicodebuf, wlen, unicodepdy);
 	len = cells;	/* used for underlining */
@@ -6462,38 +6535,22 @@ gui_mch_draw_string(
 			 foptions, pcliprect, (char *)text, len, padding);
     }
 
-#if defined(FEAT_DIRECTX)
-    if (IS_ENABLE_DIRECTX() &&
-	    (flags & (DRAW_UNDERL | DRAW_STRIKE | DRAW_UNDERC | DRAW_CURSOR)))
-	DWriteContext_Flush(s_dwc);
-#endif
-
     /* Underline */
     if (flags & DRAW_UNDERL)
     {
-	hpen = CreatePen(PS_SOLID, 1, gui.currFgColor);
-	old_pen = SelectObject(s_hdc, hpen);
 	/* When p_linespace is 0, overwrite the bottom row of pixels.
 	 * Otherwise put the line just below the character. */
 	y = FILL_Y(row + 1) - 1;
 	if (p_linespace > 1)
 	    y -= p_linespace - 1;
-	MoveToEx(s_hdc, FILL_X(col), y, NULL);
-	/* Note: LineTo() excludes the last pixel in the line. */
-	LineTo(s_hdc, FILL_X(col + len), y);
-	DeleteObject(SelectObject(s_hdc, old_pen));
+	draw_line(FILL_X(col), y, FILL_X(col + len), y, gui.currFgColor);
     }
 
     /* Strikethrough */
     if (flags & DRAW_STRIKE)
     {
-	hpen = CreatePen(PS_SOLID, 1, gui.currSpColor);
-	old_pen = SelectObject(s_hdc, hpen);
 	y = FILL_Y(row + 1) - gui.char_height/2;
-	MoveToEx(s_hdc, FILL_X(col), y, NULL);
-	/* Note: LineTo() excludes the last pixel in the line. */
-	LineTo(s_hdc, FILL_X(col + len), y);
-	DeleteObject(SelectObject(s_hdc, old_pen));
+	draw_line(FILL_X(col), y, FILL_X(col + len), y, gui.currSpColor);
     }
 
     /* Undercurl */
@@ -6507,7 +6564,7 @@ gui_mch_draw_string(
 	for (x = FILL_X(col); x < FILL_X(col + len); ++x)
 	{
 	    offset = val[x % 8];
-	    SetPixel(s_hdc, x, y - offset, gui.currSpColor);
+	    set_pixel(x, y - offset, gui.currSpColor);
 	}
     }
 }
@@ -6541,19 +6598,7 @@ gui_mch_flush(void)
     static void
 clear_rect(RECT *rcp)
 {
-    HBRUSH  hbr;
-
-#if defined(FEAT_DIRECTX)
-    if (IS_ENABLE_DIRECTX())
-    {
-	DWriteContext_FillRect(s_dwc, rcp, gui.back_pixel);
-	return;
-    }
-#endif
-
-    hbr = CreateSolidBrush(gui.back_pixel);
-    FillRect(s_hdc, rcp, hbr);
-    DeleteBrush(hbr);
+    fill_rect(rcp, NULL, gui.back_pixel);
 }
 
 

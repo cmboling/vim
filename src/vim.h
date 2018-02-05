@@ -1269,6 +1269,7 @@ enum auto_event
     EVENT_BUFWRITEPOST,		/* after writing a buffer */
     EVENT_BUFWRITEPRE,		/* before writing a buffer */
     EVENT_BUFWRITECMD,		/* write buffer using command */
+    EVENT_CMDLINECHANGED,	/* command line was modified*/
     EVENT_CMDLINEENTER,		/* after entering the command line */
     EVENT_CMDLINELEAVE,		/* before leaving the command line */
     EVENT_CMDWINENTER,		/* after entering the cmdline window */
@@ -1339,6 +1340,7 @@ enum auto_event
     EVENT_TEXTCHANGEDI,		/* text was modified in Insert mode*/
     EVENT_CMDUNDEFINED,		/* command undefined */
     EVENT_OPTIONSET,		/* option was set */
+    EVENT_TEXTYANKPOST,		/* after some text was yanked */
     NUM_EVENTS			/* MUST be the last one */
 };
 
@@ -1478,8 +1480,10 @@ typedef UINT32_TYPEDEF UINT32_T;
 #define STATUS_HEIGHT	1	/* height of a status line under a window */
 #ifdef FEAT_MENU		/* height of a status line under a window */
 # define WINBAR_HEIGHT(wp)	(wp)->w_winbar_height
+# define VISIBLE_HEIGHT(wp)	((wp)->w_height + (wp)->w_winbar_height)
 #else
 # define WINBAR_HEIGHT(wp)	0
+# define VISIBLE_HEIGHT(wp)	(wp)->w_height
 #endif
 #define QF_WINHEIGHT	10	/* default height for quickfix window */
 
@@ -1986,7 +1990,8 @@ typedef int sock_T;
 #define VV_TERMU7RESP	83
 #define VV_TERMSTYLERESP 84
 #define VV_TERMBLINKRESP 85
-#define VV_LEN		86	/* number of v: vars */
+#define VV_EVENT	86
+#define VV_LEN		87	/* number of v: vars */
 
 /* used for v_number in VAR_SPECIAL */
 #define VVAL_FALSE	0L

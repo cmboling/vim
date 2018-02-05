@@ -522,7 +522,7 @@ func Test_terminal_noblock()
   " On MS-Windows there is an extra empty line below "done".  Find "done" in
   " the last-but-one or the last-but-two line.
   let lnum = term_getsize(buf)[0] - 1
-  call WaitFor({-> term_getline(buf, lnum) =~ "done" || term_getline(buf, lnum - 1) =~ "done"}, 3000)
+  call WaitFor({-> term_getline(buf, lnum) =~ "done" || term_getline(buf, lnum - 1) =~ "done"}, 10000)
   let line = term_getline(buf, lnum)
   if line !~ 'done'
     let line = term_getline(buf, lnum - 1)
@@ -673,15 +673,16 @@ func TerminalTmap(remap)
   else
     tnoremap 123 456
   endif
-  tmap 456 abcde
+  " don't use abcde, it's an existing command
+  tmap 456 abxde
   call assert_equal('456', maparg('123', 't'))
-  call assert_equal('abcde', maparg('456', 't'))
+  call assert_equal('abxde', maparg('456', 't'))
   call feedkeys("123", 'tx')
   let g:buf = buf
-  call WaitFor("term_getline(g:buf,term_getcursor(g:buf)[0]) =~ 'abcde\\|456'")
+  call WaitFor("term_getline(g:buf,term_getcursor(g:buf)[0]) =~ 'abxde\\|456'")
   let lnum = term_getcursor(buf)[0]
   if a:remap
-    call assert_match('abcde', term_getline(buf, lnum))
+    call assert_match('abxde', term_getline(buf, lnum))
   else
     call assert_match('456', term_getline(buf, lnum))
   endif
@@ -793,4 +794,46 @@ func Test_terminal_aucmd_on_close()
   unlet s:called
   au! repro
   delfunc Nop
+endfunc
+
+func Test_terminal_term_start_empty_command()
+  let cmd = "call term_start('', {'curwin' : 1, 'term_finish' : 'close'})"
+  call assert_fails(cmd, 'E474')
+  let cmd = "call term_start('', {'curwin' : 1, 'term_finish' : 'close'})"
+  call assert_fails(cmd, 'E474')
+  let cmd = "call term_start({}, {'curwin' : 1, 'term_finish' : 'close'})"
+  call assert_fails(cmd, 'E474')
+  let cmd = "call term_start(0, {'curwin' : 1, 'term_finish' : 'close'})"
+  call assert_fails(cmd, 'E474')
+endfunc
+
+func Test_terminal_response_to_control_sequence()
+  if !has('unix')
+    return
+  endif
+
+  let buf = Run_shell_in_terminal({})
+  call term_wait(buf)
+
+  new
+  call setline(1, "\x1b[6n")
+  write! Xescape
+  bwipe
+  call term_sendkeys(buf, "cat Xescape\<cr>")
+
+  " wait for the response of control sequence from libvterm (and send it to tty)
+  sleep 200m
+  call term_wait(buf)
+
+  " Wait for output from tty to display, below an empty line.
+  " It should show \e3;1R, but only 1R may show up
+  call assert_match('\<\d\+R', term_getline(buf, 3))
+
+  call term_sendkeys(buf, "\<c-c>")
+  call term_wait(buf)
+  call Stop_shell_in_terminal(buf)
+
+  exe buf . 'bwipe'
+  call delete('Xescape')
+  unlet g:job
 endfunc

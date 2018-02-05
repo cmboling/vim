@@ -5,8 +5,11 @@ SUBSYSTEM = console
 SUBSYSTEM = $(SUBSYSTEM),$(SUBSYSTEM_VER)
 !endif
 
+NOLOGO=
+#NOLOGO=/nologo
+
 CC=cl
-CFLAGS=/O2 /nologo
+CFLAGS=/O2 $(NOLOGO)
 
 tee.exe: tee.obj
 	$(CC) $(CFLAGS) /Fo$@ $** /link /subsystem:$(SUBSYSTEM)

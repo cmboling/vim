@@ -5,6 +5,12 @@
 #   			automatically from CPUNR
 #
 
+#OPT_NOLOGO=-nologo
+#NOLOGO=/nologo
+
+NOLOGO=
+OPT_NOLOGO=
+
 TARGETOS = WINNT
 
 !ifndef APPVER
@@ -42,8 +48,8 @@ CPU = i386
 cc = cl
 link = link
 rc = rc
-cflags = -nologo -c
-lflags = -incremental:no -nologo
+cflags = $(OPT_NOLOGO) -c
+lflags = -incremental:no $(OPT_NOLOGO)
 rcflags = /r
 olelibsdll = ole32.lib uuid.lib oleaut32.lib user32.lib gdi32.lib advapi32.lib
 !endif
@@ -61,7 +67,7 @@ all: gvimext.dll
 gvimext.dll:    gvimext.obj	\
 		gvimext.res
 	$(link) $(lflags) -dll -def:gvimext.def -base:0x1C000000 -out:$*.dll $** $(olelibsdll) shell32.lib comctl32.lib -subsystem:$(SUBSYSTEM)
-	if exist $*.dll.manifest mt -nologo -manifest $*.dll.manifest -outputresource:$*.dll;2
+	if exist $*.dll.manifest mt $(OPT_NOLOGO) -manifest $*.dll.manifest -outputresource:$*.dll;2
 
 gvimext.obj: gvimext.h
 
@@ -69,7 +75,7 @@ gvimext.obj: gvimext.h
 	$(cc) $(cflags) -DFEAT_GETTEXT $(cvarsmt) $*.cpp
 
 gvimext.res: gvimext.rc
-	$(rc) /nologo $(rcflags) $(rcvars)  gvimext.rc
+	$(rc) $(NOLOGO) $(rcflags) $(rcvars)  gvimext.rc
 
 clean:
 	- if exist gvimext.dll del gvimext.dll

@@ -6478,6 +6478,7 @@ buf_modname(
 /*
  * Like fgets(), but if the file line is too long, it is truncated and the
  * rest of the line is thrown away.  Returns TRUE for end-of-file.
+ * If the line is truncated then buf[size - 2] will not be NUL.
  */
     int
 vim_fgets(char_u *buf, int size, FILE *fp)
@@ -7785,6 +7786,7 @@ static struct event_name
     {"BufWritePost",	EVENT_BUFWRITEPOST},
     {"BufWritePre",	EVENT_BUFWRITEPRE},
     {"BufWriteCmd",	EVENT_BUFWRITECMD},
+    {"CmdlineChanged",	EVENT_CMDLINECHANGED},
     {"CmdlineEnter",	EVENT_CMDLINEENTER},
     {"CmdlineLeave",	EVENT_CMDLINELEAVE},
     {"CmdwinEnter",	EVENT_CMDWINENTER},
@@ -7856,6 +7858,7 @@ static struct event_name
     {"WinEnter",	EVENT_WINENTER},
     {"WinLeave",	EVENT_WINLEAVE},
     {"VimResized",	EVENT_VIMRESIZED},
+    {"TextYankPost",	EVENT_TEXTYANKPOST},
     {NULL,		(event_T)0}
 };
 
@@ -9397,6 +9400,15 @@ has_cmdundefined(void)
 has_funcundefined(void)
 {
     return (first_autopat[(int)EVENT_FUNCUNDEFINED] != NULL);
+}
+
+/*
+ * Return TRUE when there is a TextYankPost autocommand defined.
+ */
+    int
+has_textyankpost(void)
+{
+    return (first_autopat[(int)EVENT_TEXTYANKPOST] != NULL);
 }
 
 /*
