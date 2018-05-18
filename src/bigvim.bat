@@ -8,19 +8,30 @@ call msvc2010.bat
 SET VCDIR="C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\"
 SET TOOLDIR=D:\
 
+call vcvars32.bat
+
 set opts=
 set opts=%opts% %1
 
 REM set opts=%opts% PERL=C:\Perl
-set opts=%opts% PERL=C:\Users\apoplavskiy\programs\perl\strawberry_522_32bit\perl
+REM 524
+REM set opts=%opts% PERL=C:\Users\apoplavskiy\programs\perl\strawberry_522_32bit\perl
+REM 522 64bit
+set opts=%opts% PERL=C:\Strawberry\perl
 set opts=%opts% DYNAMIC_PERL=yes
-set opts=%opts% PERL_VER=522
+set opts=%opts% PERL_VER=524
 
 set opts=%opts% GUI=yes
 set opts=%opts% OLE=yes
 
 set opts=%opts% IME=yes
 set opts=%opts% CSCOPE=yes
+
+echo %opts%
+
+%VCDIR%nmake -f Make_mvc.mak %opts%
+
+@echo off
 
 REM set opts=%opts% LUA=%TOOLDIR%lua53
 REM set opts=%opts% DYNAMIC_LUA=yes
@@ -47,6 +58,4 @@ REM set opts=%opts% RUBY_VER=22
 REM set opts=%opts% RUBY_API_VER_LONG=2.2.0
 REM set opts=%opts% RUBY_MSVCRT_NAME=msvcrt
 
-echo %opts%
 
-%VCDIR%nmake -f Make_mvc.mak %opts%
