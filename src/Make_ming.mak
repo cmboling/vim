@@ -40,13 +40,13 @@ PYTHON_VER=27
 
 # uncomment 'PYTHON3' if you want a python3-enabled version
 PYTHON3=C:/Python_372_32bit
+PYTHON3_VER=37
 
 # uncomment 'TCL' if you want a Tcl-enabled version
 #TCL=c:/tcl
 
 # uncomment 'RUBY' if you want a Ruby-enabled version
-RUBY=c:/ruby22
-
+#RUBY=c:/ruby22
 
 # Do not change this.
 UNDER_CYGWIN = no

@@ -37,6 +37,7 @@ REN = $(SHELL) -c mv -f
 DEL = $(SHELL) -c rm -f
 
 SRC =	arabic.c \
+	autocmd.c \
 	blowfish.c \
 	buffer.c \
 	charset.c \
@@ -81,6 +82,7 @@ SRC =	arabic.c \
 	screen.c \
 	search.c \
 	sha256.c \
+	sign.c \
 	spell.c \
 	spellfile.c \
 	syntax.c \
@@ -95,6 +97,7 @@ SRC =	arabic.c \
 INCL = vim.h feature.h keymap.h macros.h ascii.h term.h structs.h os_amiga.h
 
 OBJ =	obj/arabic.o \
+	obj/autocmd.o \
 	obj/blowfish.o \
 	obj/buffer.o \
 	obj/charset.o \
@@ -139,6 +142,7 @@ OBJ =	obj/arabic.o \
 	obj/screen.o \
 	obj/search.o \
 	obj/sha256.o \
+	obj/sign.o \
 	obj/spell.o \
 	obj/spellfile.o \
 	obj/syntax.o \
@@ -151,6 +155,7 @@ OBJ =	obj/arabic.o \
 	$(TERMLIB)
 
 PRO =	proto/arabic.pro \
+	proto/autocmd.pro \
 	proto/blowfish.pro \
 	proto/buffer.pro \
 	proto/charset.pro \
@@ -195,6 +200,7 @@ PRO =	proto/arabic.pro \
 	proto/screen.pro \
 	proto/search.pro \
 	proto/sha256.pro \
+	proto/sign.pro \
 	proto/spell.pro \
 	proto/spellfile.pro \
 	proto/syntax.pro \
@@ -252,6 +258,9 @@ $(OBJ): $(SYMS)
 
 obj/arabic.o:	arabic.c
 	$(CCSYM) $@ arabic.c
+
+obj/autocmd.o:	autocmd.c
+	$(CCSYM) $@ autocmd.c
 
 obj/blowfish.o:	blowfish.c
 	$(CCSYM) $@ blowfish.c
@@ -388,6 +397,9 @@ obj/search.o:	search.c
 
 obj/sha256.o:	sha256.c
 	$(CCSYM) $@ sha256.c
+
+obj/sign.o:	sign.c
+	$(CCSYM) $@ sign.c
 
 obj/spell.o:	spell.c
 	$(CCSYM) $@ spell.c
