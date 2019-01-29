@@ -39,7 +39,7 @@ PYTHON=c:/python27
 PYTHON_VER=27
 
 # uncomment 'PYTHON3' if you want a python3-enabled version
-PYTHON3=C:/Python_372_32bit
+PYTHON3=C:/Python_372_64bit
 PYTHON3_VER=37
 
 # uncomment 'TCL' if you want a Tcl-enabled version
