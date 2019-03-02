@@ -23,11 +23,11 @@ set opts=%opts% PYTHON=c:\python27\
 set opts=%opts% CSCOPE=yes
 set opts=%opts% DIRECTX=no
 
-set opts=%opts% DYNAMIC_RUBY=yes 
-set opts=%opts% RUBY_VER=24 
-set opts=%opts% RUBY_API_VER_LONG=2.4.0 
-set opts=%opts% RUBY_MSVCRT_NAME=msvcrt 
-
+set opts=%opts% DYNAMIC_RUBY=yes
+set opts=%opts% RUBY_VER=24
+set opts=%opts% RUBY_API_VER_LONG=2.4.0
+set opts=%opts% RUBY_MSVCRT_NAME=msvcrt
+bi
 set opts=%opts% RUBY=C:\ruby24
 
 set opts=%opts% %*
@@ -41,10 +41,6 @@ REM PYTHON3=%TOOLDIR%python36 DYNAMIC_PYTHON3=yes PYTHON3_VER=36
 REM MZSCHEME=%TOOLDIR%Racket 
 REM DYNAMIC_MZSCHEME=yes 
 REM MZSCHEME_VER=3m_a36fs8 
-
-
-
-
 
 REM TCL=%TOOLDIR%ActiveTcl 
 REM TCL_VER=86 TCL_VER_LONG=8.6 DYNAMIC_TCL=yes TCL_DLL=tcl86t.dll %1 IME=yes 
