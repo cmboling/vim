@@ -13,7 +13,10 @@
 
 
 # uncomment 'PERL' if you want a perl-enabled version
-#PERL=c:/perl
+PERL=c:/strawberry/perl
+PERL_VER=524
+DYNAMIC_PERL=yes
+FEATURES=HUGE
 
 # uncomment 'LUA' if you want a Lua-enabled version
 #LUA=c:/lua
@@ -32,7 +35,8 @@
 # on my Linux box, I put the Python stuff here:
 #PYTHON=/home/ron/ActivePython-2.0.0-202/src/Core
 # on my NT box, it's here:
-#PYTHON=c:/python20
+PYTHON=c:/python27
+PYTHON_VER=27
 
 # uncomment 'PYTHON3' if you want a python3-enabled version
 #PYTHON3=c:/python31
@@ -41,7 +45,7 @@
 #TCL=c:/tcl
 
 # uncomment 'RUBY' if you want a Ruby-enabled version
-#RUBY=c:/ruby
+RUBY=c:/ruby22
 
 
 # Do not change this.

@@ -1025,7 +1025,7 @@ MZSCHEME_INCL = if_mzsch.h
 # Perl interface
 !ifdef PERL
 !ifndef PERL_VER
-PERL_VER = 524
+PERL_VER = 58
 !endif
 !message Perl requested (version $(PERL_VER)) - root dir is "$(PERL)"
 !if "$(DYNAMIC_PERL)" == "yes"
@@ -1114,6 +1114,8 @@ RUBY_PLATFORM = x64-mswin64
 RUBY_PLATFORM = $(RUBY_PLATFORM)_$(MSVCRT_VER)
 !endif # MSVCRT_VER
 !endif # RUBY_PLATFORM
+
+RUBY_PLATFORM = i386-mingw32
 
 !ifndef RUBY_INSTALL_NAME
 !ifndef RUBY_MSVCRT_NAME
