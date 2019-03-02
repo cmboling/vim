@@ -32,7 +32,7 @@
 #if !GTK_CHECK_VERSION(3,0,0)
 # include <gtk/gtksignal.h>
 #endif
-#ifdef WIN3264
+#ifdef MSWIN
 # include <gdk/gdkwin32.h>
 #else
 # include <gdk/gdkx.h>
@@ -561,7 +561,7 @@ gtk_form_draw(GtkWidget *widget, cairo_t *cr)
 	     * gtk_widget_size_allocate() in advance with a well-posed
 	     * allocation for a given child widget in order to set a
 	     * certain private GtkWidget variable, called
-	     * widget->priv->alloc_need, to the proper value; othewise,
+	     * widget->priv->alloc_need, to the proper value; otherwise,
 	     * gtk_widget_draw() fails and the relevant scrollbar won't
 	     * appear on the screen.
 	     *

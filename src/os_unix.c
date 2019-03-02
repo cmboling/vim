@@ -49,7 +49,7 @@ static int selinux_enabled = -1;
 #endif
 
 #ifdef __CYGWIN__
-# ifndef WIN32
+# ifndef MSWIN
 #  include <cygwin/version.h>
 #  include <sys/cygwin.h>	/* for cygwin_conv_to_posix_path() and/or
 				 * for cygwin_conv_path() */
@@ -1605,7 +1605,7 @@ x_IOerror_check(Display *dpy UNUSED)
 {
     /* This function should not return, it causes exit().  Longjump instead. */
     LONGJMP(lc_jump_env, 1);
-#  if defined(VMS) || defined(__CYGWIN__) || defined(__CYGWIN32__)
+#  if defined(VMS) || defined(__CYGWIN__)
     return 0;  /* avoid the compiler complains about missing return value */
 #  endif
 }
@@ -1627,7 +1627,7 @@ x_IOerror_handler(Display *dpy UNUSED)
 
     /* This function should not return, it causes exit().  Longjump instead. */
     LONGJMP(x_jump_env, 1);
-# if defined(VMS) || defined(__CYGWIN__) || defined(__CYGWIN32__)
+# if defined(VMS) || defined(__CYGWIN__)
     return 0;  /* avoid the compiler complains about missing return value */
 # endif
 }
@@ -4196,12 +4196,18 @@ set_default_child_environment(int is_terminal)
 /*
  * Open a PTY, with FD for the master and slave side.
  * When failing "pty_master_fd" and "pty_slave_fd" are -1.
- * When successful both file descriptors are stored.
+ * When successful both file descriptors are stored and the allocated pty name
+ * is stored in both "*name1" and "*name2".
  */
     static void
-open_pty(int *pty_master_fd, int *pty_slave_fd, char_u **namep)
+open_pty(int *pty_master_fd, int *pty_slave_fd, char_u **name1, char_u **name2)
 {
     char	*tty_name;
+
+    if (name1 != NULL)
+	*name1 = NULL;
+    if (name2 != NULL)
+	*name2 = NULL;
 
     *pty_master_fd = mch_openpty(&tty_name);	    // open pty
     if (*pty_master_fd >= 0)
@@ -4219,8 +4225,13 @@ open_pty(int *pty_master_fd, int *pty_slave_fd, char_u **namep)
 	    close(*pty_master_fd);
 	    *pty_master_fd = -1;
 	}
-	else if (namep != NULL)
-	    *namep = vim_strsave((char_u *)tty_name);
+	else
+	{
+	    if (name1 != NULL)
+		*name1 = vim_strsave((char_u *)tty_name);
+	    if (name2 != NULL)
+		*name2 = vim_strsave((char_u *)tty_name);
+	}
     }
 }
 #endif
@@ -4513,7 +4524,7 @@ mch_call_shell_fork(
 	 * If the slave can't be opened, close the master pty.
 	 */
 	if (p_guipty && !(options & (SHELL_READ|SHELL_WRITE)))
-	    open_pty(&pty_master_fd, &pty_slave_fd, NULL);
+	    open_pty(&pty_master_fd, &pty_slave_fd, NULL, NULL);
 	/*
 	 * If not opening a pty or it didn't work, try using pipes.
 	 */
@@ -5352,13 +5363,10 @@ mch_job_start(char **argv, job_T *job, jobopt_T *options, int is_terminal)
 
     if (options->jo_pty
 	    && (!(use_file_for_in || use_null_for_in)
-		|| !(use_file_for_in || use_null_for_out)
+		|| !(use_file_for_out || use_null_for_out)
 		|| !(use_out_for_err || use_file_for_err || use_null_for_err)))
-    {
-	open_pty(&pty_master_fd, &pty_slave_fd, &job->jv_tty_out);
-	if (job->jv_tty_out != NULL)
-	    job->jv_tty_in = vim_strsave(job->jv_tty_out);
-    }
+	open_pty(&pty_master_fd, &pty_slave_fd,
+					    &job->jv_tty_out, &job->jv_tty_in);
 
     /* TODO: without the channel feature connect the child to /dev/null? */
     /* Open pipes for stdin, stdout, stderr. */
@@ -5655,6 +5663,23 @@ failed:
 	close(pty_slave_fd);
 }
 
+    static char_u *
+get_signal_name(int sig)
+{
+    int		i;
+    char_u	numbuf[NUMBUFLEN];
+
+    if (sig == SIGKILL)
+	return vim_strsave((char_u *)"kill");
+
+    for (i = 0; signal_info[i].sig != -1; i++)
+	if (sig == signal_info[i].sig)
+	    return strlow_save((char_u *)signal_info[i].name);
+
+    vim_snprintf((char *)numbuf, NUMBUFLEN, "%d", sig);
+    return vim_strsave(numbuf);
+}
+
     char *
 mch_job_status(job_T *job)
 {
@@ -5691,8 +5716,10 @@ mch_job_status(job_T *job)
     if (WIFSIGNALED(status))
     {
 	job->jv_exitval = -1;
-	if (job->jv_status < JOB_ENDED)
-	    ch_log(job->jv_channel, "Job terminated by a signal");
+	job->jv_termsig = get_signal_name(WTERMSIG(status));
+	if (job->jv_status < JOB_ENDED && job->jv_termsig != NULL)
+	    ch_log(job->jv_channel, "Job terminated by signal \"%s\"",
+							      job->jv_termsig);
 	goto return_dead;
     }
     return "run";
@@ -5738,7 +5765,10 @@ mch_detect_ended_job(job_T *job_list)
 		/* LINTED avoid "bitwise operation on signed value" */
 		job->jv_exitval = WEXITSTATUS(status);
 	    else if (WIFSIGNALED(status))
+	    {
 		job->jv_exitval = -1;
+		job->jv_termsig = get_signal_name(WTERMSIG(status));
+	    }
 	    if (job->jv_status < JOB_ENDED)
 	    {
 		ch_log(job->jv_channel, "Job ended");
@@ -5812,9 +5842,7 @@ mch_create_pty_channel(job_T *job, jobopt_T *options)
     int		pty_slave_fd = -1;
     channel_T	*channel;
 
-    open_pty(&pty_master_fd, &pty_slave_fd, &job->jv_tty_out);
-    if (job->jv_tty_out != NULL)
-	job->jv_tty_in = vim_strsave(job->jv_tty_out);
+    open_pty(&pty_master_fd, &pty_slave_fd, &job->jv_tty_out, &job->jv_tty_in);
     close(pty_slave_fd);
 
     channel = add_channel();
@@ -6390,7 +6418,7 @@ mch_expand_wildcards(
     int		shell_style = STYLE_ECHO;
     int		check_spaces;
     static int	did_find_nul = FALSE;
-    int		ampersent = FALSE;
+    int		ampersand = FALSE;
 		/* vimglob() function to define for Posix shell */
     static char *sh_vimglob_func = "vimglob() { while [ $# -ge 1 ]; do echo \"$1\"; shift; done }; vimglob >";
 
@@ -6507,7 +6535,7 @@ mch_expand_wildcards(
 	    --p;
 	if (*p == '&')				/* remove trailing '&' */
 	{
-	    ampersent = TRUE;
+	    ampersand = TRUE;
 	    *p = ' ';
 	}
 	STRCAT(command, ">");
@@ -6576,7 +6604,7 @@ mch_expand_wildcards(
 	}
     if (flags & EW_SILENT)
 	show_shell_mess = FALSE;
-    if (ampersent)
+    if (ampersand)
 	STRCAT(command, "&");		/* put the '&' after the redirection */
 
     /*
@@ -6602,7 +6630,7 @@ mch_expand_wildcards(
 
     /* When running in the background, give it some time to create the temp
      * file, but don't wait for it to finish. */
-    if (ampersent)
+    if (ampersand)
 	mch_delay(10L, TRUE);
 
     extra_shell_arg = NULL;		/* cleanup */
@@ -6685,7 +6713,7 @@ mch_expand_wildcards(
     }
     vim_free(tempname);
 
-# if defined(__CYGWIN__) || defined(__CYGWIN32__)
+# ifdef __CYGWIN__
     /* Translate <CR><NL> into <NL>.  Caution, buffer may contain NUL. */
     p = buffer;
     for (i = 0; i < (int)len; ++i)

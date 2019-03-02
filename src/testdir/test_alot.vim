@@ -48,6 +48,7 @@ source test_popup.vim
 source test_put.vim
 source test_recover.vim
 source test_reltime.vim
+source test_rename.vim
 source test_scroll_opt.vim
 source test_searchpos.vim
 source test_set.vim
@@ -66,3 +67,4 @@ source test_true_false.vim
 source test_unlet.vim
 source test_virtualedit.vim
 source test_window_cmd.vim
+source test_wnext.vim
