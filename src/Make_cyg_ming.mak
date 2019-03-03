@@ -46,7 +46,8 @@ GUI=yes
 
 # set to no if you do not want to use DirectWrite (DirectX)
 # MinGW-w64 is needed, and ARCH should be set to i686 or x86-64.
-DIRECTX=yes
+#DIRECTX=yes
+DIRECTX=no
 
 # Disable Color emoji support
 # (default is yes if DIRECTX=yes, requires WinSDK 8.1 or later.)

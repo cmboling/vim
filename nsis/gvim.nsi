@@ -75,7 +75,7 @@ SetCompressorDictSize 64
 ManifestDPIAware true
 SetDatablockOptimize on
 RequestExecutionLevel highest
-<<<<<<< HEAD
+
 XPStyle on
 
 ComponentText "This will install Vim ${VER_MAJOR}.${VER_MINOR} on your computer."
@@ -93,8 +93,7 @@ UninstallIcon icons\vim_uninst_16c.ico
 LicenseText "You should read the following before installing:"
 #LicenseData ${VIMRT}\doc\uganda.nsis.txt
 LicenseData uganda.nsis.txt
-=======
->>>>>>> e21c1580b7acb598a6e3c38565434fe5d0e2ad7a
+
 
 !ifdef HAVE_UPX
   !packhdr temp.dat "upx --best --compress-icons=1 temp.dat"
@@ -476,7 +475,6 @@ Section "$(str_section_edit_with)" id_section_editwith
 
 	SetOutPath $0
 
-<<<<<<< HEAD
 #	${If} ${RunningX64}
 #	  # Install 64-bit gvimext.dll into the GvimExt64 directory.
 #	  SetOutPath $0\GvimExt64
@@ -503,7 +501,6 @@ Section "$(str_section_edit_with)" id_section_editwith
 #	  Rename /REBOOTOK $3 $0\GvimExt64\libiconv-2.dll
 #!endif
 #	${EndIf}
-=======
 	${If} ${RunningX64}
 	  # Install 64-bit gvimext.dll into the GvimExt64 directory.
 	  SetOutPath $0\GvimExt64
@@ -516,7 +513,6 @@ Section "$(str_section_edit_with)" id_section_editwith
 	  !undef LIBRARY_X64
 	  !undef LIBRARY_SHELL_EXTENSION
 	${EndIf}
->>>>>>> e21c1580b7acb598a6e3c38565434fe5d0e2ad7a
 
 	# Install 32-bit gvimext.dll into the GvimExt32 directory.
 	SetOutPath $0\GvimExt32
