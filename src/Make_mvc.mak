@@ -633,6 +633,10 @@ CFLAGS = $(CFLAGS) /MP
 !endif
 !endif
 
+# VC10 or later has stdint.h.
+!if $(MSVC_MAJOR) >= 10
+CFLAGS = $(CFLAGS) -DHAVE_STDINT_H
+!endif
 
 !ifdef NODEBUG
 VIM = vim
@@ -654,11 +658,6 @@ OPTFLAG = $(OPTFLAG) /GL
 # (/Wp64 is deprecated in VC9 and generates an obnoxious warning.)
 !if ($(MSVC_MAJOR) == 7) || ($(MSVC_MAJOR) == 8)
 CFLAGS=$(CFLAGS) $(WP64CHECK)
-!endif
-
-# VC10 or later has stdint.h.
-!if $(MSVC_MAJOR) >= 10
-CFLAGS = $(CFLAGS) -DHAVE_STDINT_H
 !endif
 
 # Static code analysis generally available starting with VS2012 (VC11) or
