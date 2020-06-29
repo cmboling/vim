@@ -435,7 +435,7 @@ eval_spell_expr(char_u *badword, char_u *expr)
     if (p_verbose == 0)
 	++emsg_off;
 
-    if (eval1(&p, &rettv, EVAL_EVALUATE) == OK)
+    if (eval1(&p, &rettv, &EVALARG_EVALUATE) == OK)
     {
 	if (rettv.v_type != VAR_LIST)
 	    clear_tv(&rettv);
@@ -774,7 +774,7 @@ ex_let(exarg_T *eap)
     }
     else
     {
-	int eval_flags;
+	evalarg_T   evalarg;
 
 	rettv.v_type = VAR_UNKNOWN;
 	i = FAIL;
@@ -797,14 +797,22 @@ ex_let(exarg_T *eap)
 
 	    if (eap->skip)
 		++emsg_skip;
-	    eval_flags = eap->skip ? 0 : EVAL_EVALUATE;
-	    i = eval0(expr, &rettv, &eap->nextcmd, eval_flags);
+	    CLEAR_FIELD(evalarg);
+	    evalarg.eval_flags = eap->skip ? 0 : EVAL_EVALUATE;
+	    if (getline_equal(eap->getline, eap->cookie, getsourceline))
+	    {
+		evalarg.eval_getline = eap->getline;
+		evalarg.eval_cookie = eap->cookie;
+	    }
+	    i = eval0(expr, &rettv, eap, &evalarg);
+	    if (eap->skip)
+		--emsg_skip;
+	    clear_evalarg(&evalarg, eap);
 	}
 	if (eap->skip)
 	{
 	    if (i != FAIL)
 		clear_tv(&rettv);
-	    --emsg_skip;
 	}
 	else if (i != FAIL)
 	{
@@ -1122,8 +1130,8 @@ list_arg_vars(exarg_T *eap, char_u *arg, int *first)
 		{
 		    // handle d.key, l[idx], f(expr)
 		    arg_subsc = arg;
-		    if (handle_subscript(&arg, &tv, EVAL_EVALUATE, TRUE,
-							  name, &name) == FAIL)
+		    if (handle_subscript(&arg, &tv, &EVALARG_EVALUATE, TRUE)
+								       == FAIL)
 			error = TRUE;
 		    else
 		    {
@@ -1204,6 +1212,13 @@ ex_let_one(
 	    emsg(_("E996: Cannot lock an environment variable"));
 	    return NULL;
 	}
+	if (current_sctx.sc_version == SCRIPT_VERSION_VIM9
+		&& (flags & LET_NO_COMMAND) == 0)
+	{
+	    vim9_declare_error(arg);
+	    return NULL;
+	}
+
 	// Find the end of the name.
 	++arg;
 	name = arg;
@@ -2628,7 +2643,7 @@ find_var_ht(char_u *name, char_u **varname)
     if (*name == 'v')				// v: variable
 	return &vimvarht;
     if (get_current_funccal() != NULL
-	       && get_current_funccal()->func->uf_dfunc_idx == UF_NOT_COMPILED)
+	       && get_current_funccal()->func->uf_def_status == UF_NOT_COMPILED)
     {
 	// a: and l: are only used in functions defined with ":function"
 	if (*name == 'a')			// a: function argument
@@ -2866,6 +2881,15 @@ set_var_const(
     }
     is_script_local = ht == get_script_local_ht();
 
+    if (current_sctx.sc_version == SCRIPT_VERSION_VIM9
+	    && !is_script_local
+	    && (flags & LET_NO_COMMAND) == 0
+	    && name[1] == ':')
+    {
+	vim9_declare_error(name);
+	return;
+    }
+
     di = find_var_in_ht(ht, 0, varname, TRUE);
 
     // Search in parent scope which is possible to reference from lambda
@@ -2886,10 +2910,6 @@ set_var_const(
 		return;
 	    }
 
-	    if (var_check_ro(di->di_flags, name, FALSE)
-			       || var_check_lock(di->di_tv.v_lock, name, FALSE))
-		return;
-
 	    if (is_script_local
 			     && current_sctx.sc_version == SCRIPT_VERSION_VIM9)
 	    {
@@ -2900,8 +2920,13 @@ set_var_const(
 		}
 
 		// check the type
-		check_script_var_type(&di->di_tv, tv, name);
+		if (check_script_var_type(&di->di_tv, tv, name) == FAIL)
+		    return;
 	    }
+
+	    if (var_check_ro(di->di_flags, name, FALSE)
+			       || var_check_lock(di->di_tv.v_lock, name, FALSE))
+		return;
 	}
 	else
 	    // can only redefine once
@@ -3321,8 +3346,7 @@ var_exists(char_u *var)
 	if (n)
 	{
 	    // handle d.key, l[idx], f(expr)
-	    n = (handle_subscript(&var, &tv, EVAL_EVALUATE,
-						    FALSE, name, &name) == OK);
+	    n = (handle_subscript(&var, &tv, &EVALARG_EVALUATE, FALSE) == OK);
 	    if (n)
 		clear_tv(&tv);
 	}
