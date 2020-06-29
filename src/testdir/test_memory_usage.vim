@@ -1,9 +1,13 @@
 " Tests for memory usage.
 
-if !has('terminal') || has('gui_running') || $ASAN_OPTIONS !=# ''
+source check.vim
+CheckFeature terminal
+CheckNotGui
+
+if execute('version') =~# '-fsanitize=[a-z,]*\<address\>'
   " Skip tests on Travis CI ASAN build because it's difficult to estimate
   " memory usage.
-  finish
+  throw 'Skipped: does not work with ASAN'
 endif
 
 source shared.vim
@@ -14,7 +18,7 @@ endfunc
 
 if has('win32')
   if !executable('wmic')
-    finish
+    throw 'Skipped: wmic program missing'
   endif
   func s:memory_usage(pid) abort
     let cmd = printf('wmic process where processid=%d get WorkingSetSize', a:pid)
@@ -22,13 +26,13 @@ if has('win32')
   endfunc
 elseif has('unix')
   if !executable('ps')
-    finish
+    throw 'Skipped: ps program missing'
   endif
   func s:memory_usage(pid) abort
     return s:pick_nr(system('ps -o rss= -p ' . a:pid))
   endfunc
 else
-  finish
+  throw 'Skipped: not win32 or unix'
 endif
 
 " Wait for memory usage to level off.
@@ -36,15 +40,12 @@ func s:monitor_memory_usage(pid) abort
   let proc = {}
   let proc.pid = a:pid
   let proc.hist = []
-  let proc.min = 0
   let proc.max = 0
 
   func proc.op() abort
     " Check the last 200ms.
     let val = s:memory_usage(self.pid)
-    if self.min > val
-      let self.min = val
-    elseif self.max < val
+    if self.max < val
       let self.max = val
     endif
     call add(self.hist, val)
@@ -56,7 +57,7 @@ func s:monitor_memory_usage(pid) abort
   endfunc
 
   call WaitFor({-> proc.op()}, 10000)
-  return {'last': get(proc.hist, -1), 'min': proc.min, 'max': proc.max}
+  return {'last': get(proc.hist, -1), 'max': proc.max}
 endfunc
 
 let s:term_vim = {}
@@ -82,14 +83,15 @@ func Test_memory_func_capture_vargs()
   " Case: if a local variable captures a:000, funccall object will be free
   " just after it finishes.
   let testfile = 'Xtest.vim'
-  call writefile([
-        \ 'func s:f(...)',
-        \ '  let x = a:000',
-        \ 'endfunc',
-        \ 'for _ in range(10000)',
-        \ '  call s:f(0)',
-        \ 'endfor',
-        \ ], testfile)
+  let lines =<< trim END
+        func s:f(...)
+          let x = a:000
+        endfunc
+        for _ in range(10000)
+          call s:f(0)
+        endfor
+  END
+  call writefile(lines, testfile)
 
   let vim = s:vim_new()
   call vim.start('--clean', '-c', 'set noswapfile', testfile)
@@ -100,9 +102,15 @@ func Test_memory_func_capture_vargs()
   let after = s:monitor_memory_usage(vim.pid)
 
   " Estimate the limit of max usage as 2x initial usage.
-  call assert_inrange(before, 2 * before, after.max)
-  " In this case, garbase collecting is not needed.
-  call assert_equal(after.last, after.max)
+  " The lower limit can fluctuate a bit, use 97%.
+  call assert_inrange(before * 97 / 100, 2 * before, after.max)
+
+  " In this case, garbage collecting is not needed.
+  " The value might fluctuate a bit, allow for 3% tolerance below and 5% above.
+  " Based on various test runs.
+  let lower = after.last * 97 / 100
+  let upper = after.last * 105 / 100
+  call assert_inrange(lower, upper, after.max)
 
   call vim.stop()
   call delete(testfile)
@@ -113,14 +121,15 @@ func Test_memory_func_capture_lvars()
   " free until garbage collector runs, but after that memory usage doesn't
   " increase so much even when rerun Xtest.vim since system memory caches.
   let testfile = 'Xtest.vim'
-  call writefile([
-        \ 'func s:f()',
-        \ '  let x = l:',
-        \ 'endfunc',
-        \ 'for _ in range(10000)',
-        \ '  call s:f()',
-        \ 'endfor',
-        \ ], testfile)
+  let lines =<< trim END
+        func s:f()
+          let x = l:
+        endfunc
+        for _ in range(10000)
+          call s:f()
+        endfor
+  END
+  call writefile(lines, testfile)
 
   let vim = s:vim_new()
   call vim.start('--clean', '-c', 'set noswapfile', testfile)
@@ -137,7 +146,18 @@ func Test_memory_func_capture_lvars()
     let last = s:monitor_memory_usage(vim.pid).last
   endfor
 
-  call assert_inrange(before, after.max + (after.last - before), last)
+  " The usage may be a bit less than the last value, use 80%.
+  " Allow for 20% tolerance at the upper limit.  That's very permissive, but
+  " otherwise the test fails sometimes.  On Cirrus CI with FreeBSD we need to
+  " be even more permissive.
+  if has('bsd')
+    let multiplier = 15
+  else
+    let multiplier = 12
+  endif
+  let lower = before * 8 / 10
+  let upper = (after.max + (after.last - before)) * multiplier / 10
+  call assert_inrange(lower, upper, last)
 
   call vim.stop()
   call delete(testfile)

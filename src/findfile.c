@@ -188,6 +188,7 @@ static int ff_check_visited(ff_visited_T **, char_u *, char_u *);
 #else
 static int ff_check_visited(ff_visited_T **, char_u *);
 #endif
+static void vim_findfile_free_visited(void *search_ctx_arg);
 static void vim_findfile_free_visited_list(ff_visited_list_hdr_T **list_headp);
 static void ff_free_visited_list(ff_visited_T *vl);
 static ff_visited_list_hdr_T* ff_get_visited_list(char_u *, ff_visited_list_hdr_T **list_headp);
@@ -319,10 +320,9 @@ vim_findfile_init(
 	search_ctx = search_ctx_arg;
     else
     {
-	search_ctx = (ff_search_ctx_T*)alloc((unsigned)sizeof(ff_search_ctx_T));
+	search_ctx = ALLOC_CLEAR_ONE(ff_search_ctx_T);
 	if (search_ctx == NULL)
 	    goto error_return;
-	vim_memset(search_ctx, 0, sizeof(ff_search_ctx_T));
     }
     search_ctx->ffsc_find_what = find_what;
     search_ctx->ffsc_tagfile = tagfile;
@@ -350,7 +350,7 @@ vim_findfile_init(
 
     if (ff_expand_buffer == NULL)
     {
-	ff_expand_buffer = (char_u*)alloc(MAXPATHL);
+	ff_expand_buffer = alloc(MAXPATHL);
 	if (ff_expand_buffer == NULL)
 	    goto error_return;
     }
@@ -430,8 +430,7 @@ vim_findfile_init(
 	    walker++;
 
 	dircount = 1;
-	search_ctx->ffsc_stopdirs_v =
-				 (char_u **)alloc((unsigned)sizeof(char_u *));
+	search_ctx->ffsc_stopdirs_v = ALLOC_ONE(char_u *);
 
 	if (search_ctx->ffsc_stopdirs_v != NULL)
 	{
@@ -452,7 +451,7 @@ vim_findfile_init(
 		if (walker)
 		{
 		    search_ctx->ffsc_stopdirs_v[dircount-1] =
-				 vim_strnsave(helper, (int)(walker - helper));
+					 vim_strnsave(helper, walker - helper);
 		    walker++;
 		}
 		else
@@ -485,7 +484,7 @@ vim_findfile_init(
 	char	*errpt;
 
 	// save the fix part of the path
-	search_ctx->ffsc_fix_path = vim_strnsave(path, (int)(wc_part - path));
+	search_ctx->ffsc_fix_path = vim_strnsave(path, wc_part - path);
 
 	/*
 	 * copy wc_path and add restricts to the '**' wildcard.
@@ -589,9 +588,9 @@ vim_findfile_init(
 	    if (search_ctx->ffsc_wc_path != NULL)
 	    {
 		wc_path = vim_strsave(search_ctx->ffsc_wc_path);
-		temp = alloc((int)(STRLEN(search_ctx->ffsc_wc_path)
+		temp = alloc(STRLEN(search_ctx->ffsc_wc_path)
 				 + STRLEN(search_ctx->ffsc_fix_path + len)
-				 + 1));
+				 + 1);
 		if (temp == NULL || wc_path == NULL)
 		{
 		    vim_free(buf);
@@ -723,7 +722,7 @@ vim_findfile(void *search_ctx_arg)
      * filepath is used as buffer for various actions and as the storage to
      * return a found filename.
      */
-    if ((file_path = alloc((int)MAXPATHL)) == NULL)
+    if ((file_path = alloc(MAXPATHL)) == NULL)
 	return NULL;
 
 #ifdef FEAT_PATH_EXTRA
@@ -926,8 +925,7 @@ vim_findfile(void *search_ctx_arg)
 		 */
 		if (path_with_url(dirptrs[0]))
 		{
-		    stackp->ffs_filearray = (char_u **)
-					      alloc((unsigned)sizeof(char *));
+		    stackp->ffs_filearray = ALLOC_ONE(char_u *);
 		    if (stackp->ffs_filearray != NULL
 			    && (stackp->ffs_filearray[0]
 				= vim_strsave(dirptrs[0])) != NULL)
@@ -969,7 +967,7 @@ vim_findfile(void *search_ctx_arg)
 		    {
 			if (!path_with_url(stackp->ffs_filearray[i])
 				      && !mch_isdir(stackp->ffs_filearray[i]))
-			    continue;   /* not a directory */
+			    continue;   // not a directory
 
 			// prepare the filename to be checked for existence
 			// below
@@ -1188,7 +1186,7 @@ fail:
  * Free the list of lists of visited files and directories
  * Can handle it if the passed search_context is NULL;
  */
-    void
+    static void
 vim_findfile_free_visited(void *search_ctx_arg)
 {
     ff_search_ctx_T *search_ctx;
@@ -1285,7 +1283,7 @@ ff_get_visited_list(
     /*
      * if we reach this we didn't find a list and we have to allocate new list
      */
-    retptr = (ff_visited_list_hdr_T*)alloc((unsigned)sizeof(*retptr));
+    retptr = ALLOC_ONE(ff_visited_list_hdr_T);
     if (retptr == NULL)
 	return NULL;
 
@@ -1338,8 +1336,8 @@ ff_wc_equal(char_u *s1, char_u *s2)
 	prev2 = prev1;
 	prev1 = c1;
 
-	i += MB_PTR2LEN(s1 + i);
-	j += MB_PTR2LEN(s2 + j);
+	i += mb_ptr2len(s1 + i);
+	j += mb_ptr2len(s2 + j);
     }
     return s1[i] == s2[j];
 }
@@ -1413,8 +1411,7 @@ ff_check_visited(
     /*
      * New file/dir.  Add it to the list of visited files/dirs.
      */
-    vp = (ff_visited_T *)alloc((unsigned)(sizeof(ff_visited_T)
-						 + STRLEN(ff_expand_buffer)));
+    vp = alloc(sizeof(ff_visited_T) + STRLEN(ff_expand_buffer));
 
     if (vp != NULL)
     {
@@ -1462,7 +1459,7 @@ ff_create_stack_element(
 {
     ff_stack_T	*new;
 
-    new = (ff_stack_T *)alloc((unsigned)sizeof(ff_stack_T));
+    new = ALLOC_ONE(ff_stack_T);
     if (new == NULL)
 	return NULL;
 
@@ -1869,7 +1866,7 @@ find_file_in_path_option(
 		    break;
 		}
 
-		if ((buf = alloc((int)(MAXPATHL))) == NULL)
+		if ((buf = alloc(MAXPATHL)) == NULL)
 		    break;
 
 		// copy next path
@@ -2049,10 +2046,19 @@ file_name_in_line(
     if (file_lnum != NULL)
     {
 	char_u *p;
+	char	*line_english = " line ";
+	char	*line_transl = _(line_msg);
 
-	// Get the number after the file name and a separator character
+	// Get the number after the file name and a separator character.
+	// Also accept " line 999" with and without the same translation as
+	// used in last_set_msg().
 	p = ptr + len;
-	p = skipwhite(p);
+	if (STRNCMP(p, line_english, STRLEN(line_english)) == 0)
+	    p += STRLEN(line_english);
+	else if (STRNCMP(p, line_transl, STRLEN(line_transl)) == 0)
+	    p += STRLEN(line_transl);
+	else
+	    p = skipwhite(p);
 	if (*p != NUL)
 	{
 	    if (!isdigit(*p))
@@ -2277,7 +2283,7 @@ expand_path_option(char_u *curdir, garray_T *gap)
     char_u	*p;
     int		len;
 
-    if ((buf = alloc((int)MAXPATHL)) == NULL)
+    if ((buf = alloc(MAXPATHL)) == NULL)
 	return;
 
     while (*path_option != NUL)
@@ -2427,12 +2433,12 @@ uniquefy_paths(garray_T *gap, char_u *pattern)
     if (regmatch.regprog == NULL)
 	return;
 
-    if ((curdir = alloc((int)(MAXPATHL))) == NULL)
+    if ((curdir = alloc(MAXPATHL)) == NULL)
 	goto theend;
     mch_dirname(curdir, MAXPATHL);
     expand_path_option(curdir, &path_ga);
 
-    in_curdir = (char_u **)alloc_clear(gap->ga_len * sizeof(char_u *));
+    in_curdir = ALLOC_CLEAR_MULT(char_u *, gap->ga_len);
     if (in_curdir == NULL)
 	goto theend;
 
@@ -2535,7 +2541,7 @@ uniquefy_paths(garray_T *gap, char_u *pattern)
 	    continue;
 	}
 
-	rel_path = alloc((int)(STRLEN(short_name) + STRLEN(PATHSEPSTR) + 2));
+	rel_path = alloc(STRLEN(short_name) + STRLEN(PATHSEPSTR) + 2);
 	if (rel_path == NULL)
 	    goto theend;
 	STRCPY(rel_path, ".");
@@ -2579,7 +2585,7 @@ expand_in_path(
     char_u	*paths = NULL;
     int		glob_flags = 0;
 
-    if ((curdir = alloc((unsigned)MAXPATHL)) == NULL)
+    if ((curdir = alloc(MAXPATHL)) == NULL)
 	return 0;
     mch_dirname(curdir, MAXPATHL);
 
@@ -2605,3 +2611,239 @@ expand_in_path(
 }
 
 #endif // FEAT_SEARCHPATH
+
+/*
+ * Converts a file name into a canonical form. It simplifies a file name into
+ * its simplest form by stripping out unneeded components, if any.  The
+ * resulting file name is simplified in place and will either be the same
+ * length as that supplied, or shorter.
+ */
+    void
+simplify_filename(char_u *filename)
+{
+#ifndef AMIGA	    // Amiga doesn't have "..", it uses "/"
+    int		components = 0;
+    char_u	*p, *tail, *start;
+    int		stripping_disabled = FALSE;
+    int		relative = TRUE;
+
+    p = filename;
+# ifdef BACKSLASH_IN_FILENAME
+    if (p[1] == ':')	    // skip "x:"
+	p += 2;
+# endif
+
+    if (vim_ispathsep(*p))
+    {
+	relative = FALSE;
+	do
+	    ++p;
+	while (vim_ispathsep(*p));
+    }
+    start = p;	    // remember start after "c:/" or "/" or "///"
+#ifdef UNIX
+    // Posix says that "//path" is unchanged but "///path" is "/path".
+    if (start > filename + 2)
+    {
+	STRMOVE(filename + 1, p);
+	start = p = filename + 1;
+    }
+#endif
+
+    do
+    {
+	// At this point "p" is pointing to the char following a single "/"
+	// or "p" is at the "start" of the (absolute or relative) path name.
+# ifdef VMS
+	// VMS allows device:[path] - don't strip the [ in directory
+	if ((*p == '[' || *p == '<') && p > filename && p[-1] == ':')
+	{
+	    // :[ or :< composition: vms directory component
+	    ++components;
+	    p = getnextcomp(p + 1);
+	}
+	// allow remote calls as host"user passwd"::device:[path]
+	else if (p[0] == ':' && p[1] == ':' && p > filename && p[-1] == '"' )
+	{
+	    // ":: composition: vms host/passwd component
+	    ++components;
+	    p = getnextcomp(p + 2);
+	}
+	else
+# endif
+	  if (vim_ispathsep(*p))
+	    STRMOVE(p, p + 1);		// remove duplicate "/"
+	else if (p[0] == '.' && (vim_ispathsep(p[1]) || p[1] == NUL))
+	{
+	    if (p == start && relative)
+		p += 1 + (p[1] != NUL);	// keep single "." or leading "./"
+	    else
+	    {
+		// Strip "./" or ".///".  If we are at the end of the file name
+		// and there is no trailing path separator, either strip "/." if
+		// we are after "start", or strip "." if we are at the beginning
+		// of an absolute path name .
+		tail = p + 1;
+		if (p[1] != NUL)
+		    while (vim_ispathsep(*tail))
+			MB_PTR_ADV(tail);
+		else if (p > start)
+		    --p;		// strip preceding path separator
+		STRMOVE(p, tail);
+	    }
+	}
+	else if (p[0] == '.' && p[1] == '.' &&
+	    (vim_ispathsep(p[2]) || p[2] == NUL))
+	{
+	    // Skip to after ".." or "../" or "..///".
+	    tail = p + 2;
+	    while (vim_ispathsep(*tail))
+		MB_PTR_ADV(tail);
+
+	    if (components > 0)		// strip one preceding component
+	    {
+		int		do_strip = FALSE;
+		char_u		saved_char;
+		stat_T		st;
+
+		// Don't strip for an erroneous file name.
+		if (!stripping_disabled)
+		{
+		    // If the preceding component does not exist in the file
+		    // system, we strip it.  On Unix, we don't accept a symbolic
+		    // link that refers to a non-existent file.
+		    saved_char = p[-1];
+		    p[-1] = NUL;
+# ifdef UNIX
+		    if (mch_lstat((char *)filename, &st) < 0)
+# else
+			if (mch_stat((char *)filename, &st) < 0)
+# endif
+			    do_strip = TRUE;
+		    p[-1] = saved_char;
+
+		    --p;
+		    // Skip back to after previous '/'.
+		    while (p > start && !after_pathsep(start, p))
+			MB_PTR_BACK(start, p);
+
+		    if (!do_strip)
+		    {
+			// If the component exists in the file system, check
+			// that stripping it won't change the meaning of the
+			// file name.  First get information about the
+			// unstripped file name.  This may fail if the component
+			// to strip is not a searchable directory (but a regular
+			// file, for instance), since the trailing "/.." cannot
+			// be applied then.  We don't strip it then since we
+			// don't want to replace an erroneous file name by
+			// a valid one, and we disable stripping of later
+			// components.
+			saved_char = *tail;
+			*tail = NUL;
+			if (mch_stat((char *)filename, &st) >= 0)
+			    do_strip = TRUE;
+			else
+			    stripping_disabled = TRUE;
+			*tail = saved_char;
+# ifdef UNIX
+			if (do_strip)
+			{
+			    stat_T	new_st;
+
+			    // On Unix, the check for the unstripped file name
+			    // above works also for a symbolic link pointing to
+			    // a searchable directory.  But then the parent of
+			    // the directory pointed to by the link must be the
+			    // same as the stripped file name.  (The latter
+			    // exists in the file system since it is the
+			    // component's parent directory.)
+			    if (p == start && relative)
+				(void)mch_stat(".", &new_st);
+			    else
+			    {
+				saved_char = *p;
+				*p = NUL;
+				(void)mch_stat((char *)filename, &new_st);
+				*p = saved_char;
+			    }
+
+			    if (new_st.st_ino != st.st_ino ||
+				new_st.st_dev != st.st_dev)
+			    {
+				do_strip = FALSE;
+				// We don't disable stripping of later
+				// components since the unstripped path name is
+				// still valid.
+			    }
+			}
+# endif
+		    }
+		}
+
+		if (!do_strip)
+		{
+		    // Skip the ".." or "../" and reset the counter for the
+		    // components that might be stripped later on.
+		    p = tail;
+		    components = 0;
+		}
+		else
+		{
+		    // Strip previous component.  If the result would get empty
+		    // and there is no trailing path separator, leave a single
+		    // "." instead.  If we are at the end of the file name and
+		    // there is no trailing path separator and a preceding
+		    // component is left after stripping, strip its trailing
+		    // path separator as well.
+		    if (p == start && relative && tail[-1] == '.')
+		    {
+			*p++ = '.';
+			*p = NUL;
+		    }
+		    else
+		    {
+			if (p > start && tail[-1] == '.')
+			    --p;
+			STRMOVE(p, tail);	// strip previous component
+		    }
+
+		    --components;
+		}
+	    }
+	    else if (p == start && !relative)	// leading "/.." or "/../"
+		STRMOVE(p, tail);		// strip ".." or "../"
+	    else
+	    {
+		if (p == start + 2 && p[-2] == '.')	// leading "./../"
+		{
+		    STRMOVE(p - 2, p);			// strip leading "./"
+		    tail -= 2;
+		}
+		p = tail;		// skip to char after ".." or "../"
+	    }
+	}
+	else
+	{
+	    ++components;		// simple path component
+	    p = getnextcomp(p);
+	}
+    } while (*p != NUL);
+#endif // !AMIGA
+}
+
+#if defined(FEAT_EVAL) || defined(PROTO)
+/*
+ * "simplify()" function
+ */
+    void
+f_simplify(typval_T *argvars, typval_T *rettv)
+{
+    char_u	*p;
+
+    p = tv_get_string(&argvars[0]);
+    rettv->vval.v_string = vim_strsave(p);
+    simplify_filename(rettv->vval.v_string);	// simplify in place
+    rettv->v_type = VAR_STRING;
+}
+#endif // FEAT_EVAL
