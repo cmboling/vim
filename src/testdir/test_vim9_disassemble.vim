@@ -21,9 +21,13 @@ def s:ScriptFuncLoad(arg: string)
   echo v:version
   echo s:scriptvar
   echo g:globalvar
+  echo get(g:, "global")
   echo b:buffervar
+  echo get(b:, "buffer")
   echo w:windowvar
+  echo get(w:, "window")
   echo t:tabpagevar
+  echo get(t:, "tab")
   echo &tabstop
   echo $ENVVAR
   echo @z
@@ -34,8 +38,8 @@ def Test_disassemble_load()
   assert_fails('disass NotCompiled', 'E1062:')
   assert_fails('disass', 'E471:')
   assert_fails('disass [', 'E475:')
-  assert_fails('disass 234', 'E475:')
-  assert_fails('disass <XX>foo', 'E475:')
+  assert_fails('disass 234', 'E129:')
+  assert_fails('disass <XX>foo', 'E129:')
 
   let res = execute('disass s:ScriptFuncLoad')
   assert_match('<SNR>\d*_ScriptFuncLoad.*' ..
@@ -47,9 +51,25 @@ def Test_disassemble_load()
         ' LOADV v:version.*' ..
         ' LOADS s:scriptvar from .*test_vim9_disassemble.vim.*' ..
         ' LOADG g:globalvar.*' ..
+        'echo get(g:, "global")\_s*' ..
+        '\d\+ LOAD g:\_s*' ..
+        '\d\+ PUSHS "global"\_s*' ..
+        '\d\+ BCALL get(argc 2).*' ..
         ' LOADB b:buffervar.*' ..
+        'echo get(b:, "buffer")\_s*' ..
+        '\d\+ LOAD b:\_s*' ..
+        '\d\+ PUSHS "buffer"\_s*' ..
+        '\d\+ BCALL get(argc 2).*' ..
         ' LOADW w:windowvar.*' ..
+        'echo get(w:, "window")\_s*' ..
+        '\d\+ LOAD w:\_s*' ..
+        '\d\+ PUSHS "window"\_s*' ..
+        '\d\+ BCALL get(argc 2).*' ..
         ' LOADT t:tabpagevar.*' ..
+        'echo get(t:, "tab")\_s*' ..
+        '\d\+ LOAD t:\_s*' ..
+        '\d\+ PUSHS "tab"\_s*' ..
+        '\d\+ BCALL get(argc 2).*' ..
         ' LOADENV $ENVVAR.*' ..
         ' LOADREG @z.*',
         res)
@@ -463,7 +483,7 @@ def Test_disassemble_update_instr()
         '\d RETURN',
         res)
 
-  " Calling the function will change UCALL into the faster DCALL
+  # Calling the function will change UCALL into the faster DCALL
   assert_equal('yes', FuncWithForwardCall())
 
   res = execute('disass s:FuncWithForwardCall')
@@ -664,6 +684,37 @@ def Test_disassemble_lambda()
         '\d PCALL (argc 1)\_s*' ..
         '\d RETURN',
         instr)
+
+   let name = substitute(instr, '.*\(<lambda>\d\+\).*', '\1', '')
+   instr = execute('disassemble ' .. name)
+   assert_match('<lambda>\d\+\_s*' ..
+        'return "X" .. a .. "X"\_s*' ..
+        '\d PUSHS "X"\_s*' ..
+        '\d LOAD arg\[-1\]\_s*' ..
+        '\d 2STRING stack\[-1\]\_s*' ..
+        '\d CONCAT\_s*' ..
+        '\d PUSHS "X"\_s*' ..
+        '\d CONCAT\_s*' ..
+        '\d RETURN',
+        instr)
+enddef
+
+def NestedOuter()
+  def g:Inner()
+    echomsg "inner"
+  enddef
+enddef
+
+def Test_nested_func()
+   let instr = execute('disassemble NestedOuter')
+   assert_match('NestedOuter\_s*' ..
+        'def g:Inner()\_s*' ..
+        'echomsg "inner"\_s*' ..
+        'enddef\_s*' ..
+        '\d NEWFUNC <lambda>\d\+ Inner\_s*' ..
+        '\d PUSHNR 0\_s*' ..
+        '\d RETURN',
+        instr)
 enddef
 
 def AndOr(arg: any): string
@@ -724,6 +775,43 @@ def Test_disassemble_for_loop()
         'endfor\_s*' ..
         '\d\+ JUMP -> \d\+\_s*' ..
         '\d\+ DROP',
+        instr)
+enddef
+
+def ForLoopEval(): string
+  let res = ""
+  for str in eval('["one", "two"]')
+    res ..= str
+  endfor
+  return res
+enddef
+
+def Test_disassemble_for_loop_eval()
+  assert_equal('onetwo', ForLoopEval())
+  let instr = execute('disassemble ForLoopEval')
+  assert_match('ForLoopEval\_s*' ..
+        'let res = ""\_s*' ..
+        '\d PUSHS ""\_s*' ..
+        '\d STORE $0\_s*' ..
+        'for str in eval(''\["one", "two"\]'')\_s*' ..
+        '\d STORE -1 in $1\_s*' ..
+        '\d PUSHS "\["one", "two"\]"\_s*' ..
+        '\d BCALL eval(argc 1)\_s*' ..
+        '\d CHECKTYPE list stack\[-1\]\_s*' ..
+        '\d FOR $1 -> \d\+\_s*' ..
+        '\d STORE $2\_s*' ..
+        'res ..= str\_s*' ..
+        '\d\+ LOAD $0\_s*' ..
+        '\d\+ LOAD $2\_s*' ..
+        '\d\+ CHECKTYPE string stack\[-1\]\_s*' ..
+        '\d\+ CONCAT\_s*' ..
+        '\d\+ STORE $0\_s*' ..
+        'endfor\_s*' ..
+        '\d\+ JUMP -> 6\_s*' ..
+        '\d\+ DROP\_s*' ..
+        'return res\_s*' ..
+        '\d\+ LOAD $0\_s*' ..
+        '\d\+ RETURN',
         instr)
 enddef
 
@@ -848,6 +936,27 @@ def Test_disassemble_concat()
   assert_equal('aabb', ConcatString())
 enddef
 
+def StringIndex(): number
+  let s = "abcd"
+  let res = s[1]
+  return res
+enddef
+
+def Test_disassemble_string_index()
+  let instr = execute('disassemble StringIndex')
+  assert_match('StringIndex\_s*' ..
+        'let s = "abcd"\_s*' ..
+        '\d PUSHS "abcd"\_s*' ..
+        '\d STORE $0\_s*' ..
+        'let res = s\[1]\_s*' ..
+        '\d LOAD $0\_s*' ..
+        '\d PUSHNR 1\_s*' ..
+        '\d STRINDEX\_s*' ..
+        '\d STORE $1\_s*',
+        instr)
+  assert_equal('b', StringIndex())
+enddef
+
 def ListIndex(): number
   let l = [1, 2, 3]
   let res = l[1]
@@ -866,7 +975,7 @@ def Test_disassemble_list_index()
         'let res = l\[1]\_s*' ..
         '\d LOAD $0\_s*' ..
         '\d PUSHNR 1\_s*' ..
-        '\d INDEX\_s*' ..
+        '\d LISTINDEX\_s*' ..
         '\d STORE $1\_s*',
         instr)
   assert_equal(2, ListIndex())
@@ -1023,7 +1132,7 @@ def Test_disassemble_compare()
 
   let nr = 1
   for case in cases
-    " declare local variables to get a non-constant with the right type
+    # declare local variables to get a non-constant with the right type
     writefile(['def TestCase' .. nr .. '()',
              '  let isFalse = false',
              '  let isNull = v:null',
@@ -1071,7 +1180,7 @@ def Test_disassemble_compare_const()
     source Xdisassemble
     let instr = execute('disassemble TestCase' .. nr)
     if case[1]
-      " condition true, "echo 42" executed
+      # condition true, "echo 42" executed
       assert_match('TestCase' .. nr .. '.*' ..
           'if ' .. substitute(case[0], '[[~]', '\\\0', 'g') .. '.*' ..
           '\d PUSHNR 42.*' ..
@@ -1080,7 +1189,7 @@ def Test_disassemble_compare_const()
           '\d RETURN.*',
           instr)
     else
-      " condition false, function just returns
+      # condition false, function just returns
       assert_match('TestCase' .. nr .. '.*' ..
           'if ' .. substitute(case[0], '[[~]', '\\\0', 'g') .. '[ \n]*' ..
           'echo 42[ \n]*' ..
@@ -1195,7 +1304,7 @@ def Test_vim9script_forward_func()
   writefile(lines, 'Xdisassemble')
   source Xdisassemble
 
-  " check that the first function calls the second with DCALL
+  # check that the first function calls the second with DCALL
   assert_match('\<SNR>\d*_FuncOne\_s*' ..
         'return FuncTwo()\_s*' ..
         '\d DCALL <SNR>\d\+_FuncTwo(argc 0)\_s*' ..
@@ -1237,6 +1346,24 @@ def Test_simplify_const_expr()
   assert_match('<SNR>\d*_ComputeConstParen\_s*' ..
         'return ((2 + 4) \* (8 / 2)) / (3 + 4)\_s*' ..
         '\d PUSHNR 3\>\_s*' ..
+        '\d RETURN',
+        res)
+enddef
+
+def s:CallAppend()
+  eval "some text"->append(2)
+enddef
+
+def Test_shuffle()
+  let res = execute('disass s:CallAppend')
+  assert_match('<SNR>\d*_CallAppend\_s*' ..
+        'eval "some text"->append(2)\_s*' ..
+        '\d PUSHS "some text"\_s*' ..
+        '\d PUSHNR 2\_s*' ..
+        '\d SHUFFLE 2 up 1\_s*' ..
+        '\d BCALL append(argc 2)\_s*' ..
+        '\d DROP\_s*' ..
+        '\d PUSHNR 0\_s*' ..
         '\d RETURN',
         res)
 enddef

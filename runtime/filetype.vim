@@ -1,7 +1,7 @@
 " Vim support file to detect file types
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2020 Jun 15
+" Last Change:	2020 Jun 25
 
 " Listen very carefully, I will say this only once
 if exists("did_load_filetypes")
@@ -87,6 +87,9 @@ endif
 
 " AHDL
 au BufNewFile,BufRead *.tdf			setf ahdl
+
+" AIDL
+au BufNewFile,BufRead *.aidl			setf aidl
 
 " AMPL
 au BufNewFile,BufRead *.run			setf ampl
