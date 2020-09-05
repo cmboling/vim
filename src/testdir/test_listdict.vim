@@ -23,6 +23,9 @@ func Test_list_create()
   call assert_equal(10, x)
 endfunc
 
+" This was allowed in legacy Vim script
+let s:list_with_spaces = [1 , 2 , 3]
+
 " List slices
 func Test_list_slice()
   let l = [1, 'as''d', [1, 2, function("strlen")], {'a': 1},]
@@ -64,7 +67,7 @@ func Test_list_unlet()
 
   " removing items out of range: silently skip items that don't exist
   let l = [0, 1, 2, 3]
-  call assert_fails('unlet l[2:1]', 'E684')
+  call assert_fails('unlet l[2:1]', 'E684:')
   let l = [0, 1, 2, 3]
   unlet l[2:2]
   call assert_equal([0, 1, 3], l)
@@ -78,7 +81,7 @@ func Test_list_unlet()
   unlet l[2:5]
   call assert_equal([0, 1], l)
   let l = [0, 1, 2, 3]
-  call assert_fails('unlet l[-1:2]', 'E684')
+  call assert_fails('unlet l[-1:2]', 'E684:')
   let l = [0, 1, 2, 3]
   unlet l[-2:2]
   call assert_equal([0, 1, 3], l)
@@ -101,8 +104,8 @@ func Test_list_assign()
   let l = [0, 1, 2, 3]
   let [va, vb] = l[2:3]
   call assert_equal([2, 3], [va, vb])
-  call assert_fails('let [va, vb] = l', 'E687')
-  call assert_fails('let [va, vb] = l[1:1]', 'E688')
+  call assert_fails('let [va, vb] = l', 'E687:')
+  call assert_fails('let [va, vb] = l[1:1]', 'E688:')
 endfunc
 
 " test for range assign
@@ -183,7 +186,7 @@ func Test_dict()
 
   call extend(d, {3:33, 1:99})
   call extend(d, {'b':'bbb', 'c':'ccc'}, "keep")
-  call assert_fails("call extend(d, {3:333,4:444}, 'error')", 'E737')
+  call assert_fails("call extend(d, {3:333,4:444}, 'error')", 'E737:')
   call assert_equal({'c': 'ccc', '1': 99, 'b': [1, 2, function('strlen')], '3': 33, '-1': {'a': 1}}, d)
   call filter(d, 'v:key =~ ''[ac391]''')
   call assert_equal({'c': 'ccc', '1': 99, '3': 33, '-1': {'a': 1}}, d)
@@ -201,6 +204,10 @@ func Test_dict()
   " undefined variable as value
   call assert_fails("let d={'k' : i}", 'E121:')
 endfunc
+
+" This was allowed in legacy Vim script
+let s:dict_with_spaces = {'one' : 1 , 'two' : 2 , 'three' : 3}
+let s:dict_with_spaces_lit = #{one : 1 , two : 2 , three : 3}
 
 " Dictionary identity
 func Test_dict_identity()
@@ -282,6 +289,13 @@ func Test_dict_func()
   call assert_equal('xxx3', Fn('xxx'))
 endfunc
 
+func Test_dict_assign()
+  let d = {}
+  let d.1 = 1
+  let d._ = 2
+  call assert_equal({'1': 1, '_': 2}, d)
+endfunc
+
 " Function in script-local List or Dict
 func Test_script_local_dict_func()
   let g:dict = {}
@@ -329,7 +343,7 @@ func Test_dict_deepcopy()
   let l = [4, d, 6]
   let d[3] = l
   let dc = deepcopy(d)
-  call assert_fails('call deepcopy(d, 1)', 'E698')
+  call assert_fails('call deepcopy(d, 1)', 'E698:')
   let l2 = [0, l, l, 3]
   let l[1] = l2
   let l3 = deepcopy(l2)
@@ -508,7 +522,7 @@ func Test_dict_lock_unlet()
   unlet! d
   let d = {'a': 99, 'b': 100}
   lockvar 1 d
-  call assert_fails('unlet d.a', 'E741')
+  call assert_fails('unlet d.a', 'E741:')
 endfunc
 
 " unlet after lock on dict item
@@ -543,7 +557,7 @@ func Test_dict_lock_extend()
   unlet! d
   let d = {'a': 99, 'b': 100}
   lockvar d.a
-  call assert_fails("call extend(d, {'a' : 123})", 'E741')
+  call assert_fails("call extend(d, {'a' : 123})", 'E741:')
   call assert_equal({'a': 99, 'b': 100}, d)
 endfunc
 
@@ -558,7 +572,7 @@ endfunc
 
 " No remove() of write-protected scope-level variable
 func Tfunc1(this_is_a_long_parameter_name)
-  call assert_fails("call remove(a:, 'this_is_a_long_parameter_name')", 'E742')
+  call assert_fails("call remove(a:, 'this_is_a_long_parameter_name')", 'E742:')
 endfunc
 func Test_dict_scope_var_remove()
   call Tfunc1('testval')
@@ -566,11 +580,11 @@ endfunc
 
 " No extend() of write-protected scope-level variable
 func Test_dict_scope_var_extend()
-  call assert_fails("call extend(a:, {'this_is_a_long_parameter_name': 1234})", 'E742')
+  call assert_fails("call extend(a:, {'this_is_a_long_parameter_name': 1234})", 'E742:')
 endfunc
 
 func Tfunc2(this_is_a_long_parameter_name)
-  call assert_fails("call extend(a:, {'this_is_a_long_parameter_name': 1234})", 'E742')
+  call assert_fails("call extend(a:, {'this_is_a_long_parameter_name': 1234})", 'E742:')
 endfunc
 func Test_dict_scope_var_extend_overwrite()
   call Tfunc2('testval')
@@ -674,10 +688,10 @@ func Test_reverse_sort_uniq()
   endif
 
   call assert_fails('call reverse("")', 'E899:')
-  call assert_fails('call uniq([1, 2], {x, y -> []})', 'E882:')
+  call assert_fails('call uniq([1, 2], {x, y -> []})', 'E745:')
   call assert_fails("call sort([1, 2], function('min'), 1)", "E715:")
   call assert_fails("call sort([1, 2], function('invalid_func'))", "E700:")
-  call assert_fails("call sort([1, 2], function('min'))", "E702:")
+  call assert_fails("call sort([1, 2], function('min'))", "E118:")
 endfunc
 
 " reduce a list or a blob
@@ -718,6 +732,9 @@ func Test_reduce()
   call assert_fails("call reduce(g:lut, { acc, val -> EvilRemove() }, 1)", 'E742:')
   unlet g:lut
   delfunc EvilRemove
+
+  call assert_equal(42, reduce(test_null_list(), function('add'), 42))
+  call assert_equal(42, reduce(test_null_blob(), function('add'), 42))
 endfunc
 
 " splitting a string to a List using split()
@@ -845,7 +862,7 @@ func s:check_scope_dict(x, fixed)
 
   let cmd = s:gen_cmd('let x:foo = 1', a:x)
   if a:fixed
-    call assert_fails(cmd, 'E461')
+    call assert_fails(cmd, 'E461:')
   else
     exe cmd
     exe s:gen_cmd('call assert_equal(1, x:foo)', a:x)
@@ -853,7 +870,7 @@ func s:check_scope_dict(x, fixed)
 
   let cmd = s:gen_cmd('let x:["bar"] = 2', a:x)
   if a:fixed
-    call assert_fails(cmd, 'E461')
+    call assert_fails(cmd, 'E461:')
   else
     exe cmd
     exe s:gen_cmd('call assert_equal(2, x:bar)', a:x)
@@ -861,7 +878,7 @@ func s:check_scope_dict(x, fixed)
 
   let cmd = s:gen_cmd('call extend(x:, {"baz": 3})', a:x)
   if a:fixed
-    call assert_fails(cmd, 'E742')
+    call assert_fails(cmd, 'E742:')
   else
     exe cmd
     exe s:gen_cmd('call assert_equal(3, x:baz)', a:x)
@@ -869,11 +886,11 @@ func s:check_scope_dict(x, fixed)
 
   if a:fixed
     if a:x ==# 'a'
-      call assert_fails('unlet a:x', 'E795')
-      call assert_fails('call remove(a:, "x")', 'E742')
+      call assert_fails('unlet a:x', 'E795:')
+      call assert_fails('call remove(a:, "x")', 'E742:')
     elseif a:x ==# 'v'
-      call assert_fails('unlet v:count', 'E795')
-      call assert_fails('call remove(v:, "count")', 'E742')
+      call assert_fails('unlet v:count', 'E795:')
+      call assert_fails('call remove(v:, "count")', 'E742:')
     endif
   else
     exe s:gen_cmd('unlet x:foo', a:x)
@@ -957,7 +974,7 @@ func Test_listdict_index()
   call assert_fails('echo d[1:2]', 'E719:')
   call assert_fails("let v = [4, 6][{-> 1}]", 'E729:')
   call assert_fails("let v = range(5)[2:[]]", 'E730:')
-  call assert_fails("let v = range(5)[2:{-> 2}(]", 'E116:')
+  call assert_fails("let v = range(5)[2:{-> 2}(]", ['E15:', 'E116:'])
   call assert_fails("let v = range(5)[2:3", 'E111:')
   call assert_fails("let l = insert([1,2,3], 4, 10)", 'E684:')
   call assert_fails("let l = insert([1,2,3], 4, -10)", 'E684:')

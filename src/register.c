@@ -989,16 +989,16 @@ yank_do_autocmd(oparg_T *oap, yankreg_T *reg)
     for (n = 0; n < reg->y_size; n++)
 	list_append_string(list, reg->y_array[n], -1);
     list->lv_lock = VAR_FIXED;
-    dict_add_list(v_event, "regcontents", list);
+    (void)dict_add_list(v_event, "regcontents", list);
 
     buf[0] = (char_u)oap->regname;
     buf[1] = NUL;
-    dict_add_string(v_event, "regname", buf);
+    (void)dict_add_string(v_event, "regname", buf);
 
     buf[0] = get_op_char(oap->op_type);
     buf[1] = get_extra_op_char(oap->op_type);
     buf[2] = NUL;
-    dict_add_string(v_event, "operator", buf);
+    (void)dict_add_string(v_event, "operator", buf);
 
     buf[0] = NUL;
     buf[1] = NUL;
@@ -1011,9 +1011,9 @@ yank_do_autocmd(oparg_T *oap, yankreg_T *reg)
 			     reglen + 1);
 		break;
     }
-    dict_add_string(v_event, "regtype", buf);
+    (void)dict_add_string(v_event, "regtype", buf);
 
-    dict_add_bool(v_event, "visual", oap->is_VIsual);
+    (void)dict_add_bool(v_event, "visual", oap->is_VIsual);
 
     // Lock the dictionary and its keys
     dict_set_items_ro(v_event);
@@ -1764,7 +1764,7 @@ do_put(
 	{
 	    if (dir == FORWARD && c == NUL)
 		++col;
-	    if (dir != FORWARD && c != NUL)
+	    if (dir != FORWARD && c != NUL && curwin->w_cursor.coladd > 0)
 		++curwin->w_cursor.col;
 	    if (c == TAB)
 	    {
@@ -1937,16 +1937,29 @@ do_put(
 	    --lnum;
 	new_cursor = curwin->w_cursor;
 
-	// simple case: insert into current line
+	// simple case: insert into one line at a time
 	if (y_type == MCHAR && y_size == 1)
 	{
-	    linenr_T end_lnum = 0; // init for gcc
+	    linenr_T	end_lnum = 0; // init for gcc
+	    linenr_T	start_lnum = lnum;
 
 	    if (VIsual_active)
 	    {
 		end_lnum = curbuf->b_visual.vi_end.lnum;
 		if (end_lnum < curbuf->b_visual.vi_start.lnum)
 		    end_lnum = curbuf->b_visual.vi_start.lnum;
+		if (end_lnum > start_lnum)
+		{
+		    pos_T   pos;
+
+		    // "col" is valid for the first line, in following lines
+		    // the virtual column needs to be used.  Matters for
+		    // multi-byte characters.
+		    pos.lnum = lnum;
+		    pos.col = col;
+		    pos.coladd = 0;
+		    getvcol(curwin, &pos, NULL, &vcol, NULL);
+		}
 	    }
 
 	    do {
@@ -1954,6 +1967,16 @@ do_put(
 		if (totlen > 0)
 		{
 		    oldp = ml_get(lnum);
+		    if (lnum > start_lnum)
+		    {
+			pos_T   pos;
+
+			pos.lnum = lnum;
+			if (getvpos(&pos, vcol) == OK)
+			    col = pos.col;
+			else
+			    col = MAXCOL;
+		    }
 		    if (VIsual_active && col > (int)STRLEN(oldp))
 		    {
 			lnum++;

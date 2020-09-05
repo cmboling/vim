@@ -577,6 +577,62 @@ func Test_popup_drag()
   call delete('XtestPopupDrag')
 endfunc
 
+func Test_popup_drag_termwin()
+  CheckUnix
+  CheckScreendump
+  CheckFeature terminal
+
+  " create a popup that covers the terminal window
+  let lines =<< trim END
+	set foldmethod=marker
+	call setline(1, range(100))
+	for nr in range(7)
+	  call setline(nr * 12 + 1, "fold {{{")
+	  call setline(nr * 12 + 11, "end }}}")
+	endfor
+	%foldclose
+	set shell=/bin/sh noruler
+	let $PS1 = 'vim> '
+        terminal ++rows=4
+	$wincmd w
+	let winid = popup_create(['1111', '2222'], #{
+	      \ drag: 1,
+	      \ resize: 1,
+	      \ border: [],
+	      \ line: 3,
+	      \ })
+	func DragitLeft()
+	  call feedkeys("\<F3>\<LeftMouse>\<F4>\<LeftDrag>\<LeftRelease>", "xt")
+	endfunc
+	func DragitDown()
+	  call feedkeys("\<F4>\<LeftMouse>\<F5>\<LeftDrag>\<LeftRelease>", "xt")
+	endfunc
+	func DragitDownLeft()
+	  call feedkeys("\<F5>\<LeftMouse>\<F6>\<LeftDrag>\<LeftRelease>", "xt")
+	endfunc
+	map <silent> <F3> :call test_setmouse(3, &columns / 2)<CR>
+	map <silent> <F4> :call test_setmouse(3, &columns / 2 - 20)<CR>
+	map <silent> <F5> :call test_setmouse(12, &columns / 2)<CR>
+	map <silent> <F6> :call test_setmouse(12, &columns / 2 - 20)<CR>
+  END
+  call writefile(lines, 'XtestPopupTerm')
+  let buf = RunVimInTerminal('-S XtestPopupTerm', #{rows: 16})
+  call VerifyScreenDump(buf, 'Test_popupwin_term_01', {})
+
+  call term_sendkeys(buf, ":call DragitLeft()\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_term_02', {})
+
+  call term_sendkeys(buf, ":call DragitDown()\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_term_03', {})
+
+  call term_sendkeys(buf, ":call DragitDownLeft()\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_term_04', {})
+
+  " clean up
+  call StopVimInTerminal(buf)
+  call delete('XtestPopupTerm')
+endfunc
+
 func Test_popup_close_with_mouse()
   CheckScreendump
 
@@ -697,6 +753,7 @@ func Test_popup_with_mask()
 	    \ posinvert: 0,
 	    \ wrap: 0,
 	    \ fixed: 1,
+	    \ scrollbar: v:false,
 	    \ zindex: 90,
 	    \ padding: [],
 	    \ highlight: 'PopupColor',
@@ -716,6 +773,7 @@ func Test_popup_with_mask()
 	    \ posinvert: 0,
 	    \ wrap: 0,
 	    \ fixed: 1,
+	    \ scrollbar: v:false,
 	    \ close: 'button',
 	    \ zindex: 90,
 	    \ padding: [],
@@ -918,11 +976,11 @@ endfunc
 func Test_win_execute_closing_curwin()
   split
   let winid = popup_create('some text', {})
-  call assert_fails('call win_execute(winid, winnr() .. "close")', 'E994')
+  call assert_fails('call win_execute(winid, winnr() .. "close")', 'E994:')
   call popup_clear()
 
   let winid = popup_create('some text', {})
-  call assert_fails('call win_execute(winid, printf("normal! :\<C-u>call popup_close(%d)\<CR>", winid))', 'E994')
+  call assert_fails('call win_execute(winid, printf("normal! :\<C-u>call popup_close(%d)\<CR>", winid))', 'E994:')
   call popup_clear()
 endfunc
 
@@ -2088,6 +2146,41 @@ func Test_popup_scrollbar()
   call delete('XtestPopupScroll')
 endfunc
 
+func Test_popup_too_high_scrollbar()
+  CheckScreendump
+
+  let lines =<< trim END
+    call setline(1, range(1, 20)->map({i, v -> repeat(v, 10)}))
+    set scrolloff=0
+    func ShowPopup()
+      let winid = popup_atcursor(['one', 'two', 'three', 'four', 'five',
+	    \ 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'], #{
+	    \ minwidth: 8,
+	    \ border: [],
+	    \ })
+    endfunc
+    normal 3G$
+    call ShowPopup()
+  END
+  call writefile(lines, 'XtestPopupToohigh')
+  let buf = RunVimInTerminal('-S XtestPopupToohigh', #{rows: 10})
+  call VerifyScreenDump(buf, 'Test_popupwin_toohigh_1', {})
+
+  call term_sendkeys(buf, ":call popup_clear()\<CR>")
+  call term_sendkeys(buf, "8G$")
+  call term_sendkeys(buf, ":call ShowPopup()\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_toohigh_2', {})
+
+  call term_sendkeys(buf, ":call popup_clear()\<CR>")
+  call term_sendkeys(buf, "gg$")
+  call term_sendkeys(buf, ":call ShowPopup()\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_toohigh_3', {})
+
+  " clean up
+  call StopVimInTerminal(buf)
+  call delete('XtestPopupToohigh')
+endfunc
+
 func Test_popup_fitting_scrollbar()
   " this was causing a crash, divide by zero
   let winid = popup_create([
@@ -2144,6 +2237,18 @@ func Test_popup_settext()
   " clean up
   call StopVimInTerminal(buf)
   call delete('XtestPopupSetText')
+endfunc
+
+func Test_popup_settext_getline()
+  let id = popup_create('', #{ tabpage: 0 })
+  call popup_settext(id, ['a','b'])
+  call assert_equal(2, line('$', id)) " OK :)
+  call popup_close(id)
+
+  let id = popup_create('', #{ tabpage: -1 })
+  call popup_settext(id, ['a','b'])
+  call assert_equal(2, line('$', id)) " Fails :(
+  call popup_close(id)
 endfunc
 
 func Test_popup_hidden()
@@ -2466,20 +2571,23 @@ endfunc
 
 func Test_popupwin_close_prevwin()
   CheckFeature terminal
+  call Popupwin_close_prevwin()
+endfunc
 
-  call assert_equal(1, winnr('$'))
+def Popupwin_close_prevwin()
+  assert_equal(1, winnr('$'))
   split
   wincmd b
-  call assert_equal(2, winnr())
+  assert_equal(2, winnr())
   let buf = term_start(&shell, #{hidden: 1})
-  call popup_create(buf, {})
-  call term_wait(buf, 100)
-  call popup_clear(1)
-  call assert_equal(2, winnr())
+  popup_create(buf, {})
+  TermWait(buf, 100)
+  popup_clear(true)
+  assert_equal(2, winnr())
 
   quit
   exe 'bwipe! ' .. buf
-endfunc
+enddef
 
 func Test_popupwin_with_buffer_and_filter()
   new Xwithfilter
@@ -3053,6 +3161,17 @@ func Test_popupmenu_info_border()
   call term_sendkeys(buf, "otest text test text\<C-X>\<C-U>")
   call VerifyScreenDump(buf, 'Test_popupwin_infopopup_7', {})
 
+  " Test that when the option is changed the popup changes.
+  call term_sendkeys(buf, "\<Esc>")
+  call term_sendkeys(buf, ":set completepopup=border:off\<CR>")
+  call term_sendkeys(buf, "a\<C-X>\<C-U>")
+  call VerifyScreenDump(buf, 'Test_popupwin_infopopup_8', {})
+
+  call term_sendkeys(buf, " \<Esc>")
+  call term_sendkeys(buf, ":set completepopup+=width:10\<CR>")
+  call term_sendkeys(buf, "a\<C-X>\<C-U>")
+  call VerifyScreenDump(buf, 'Test_popupwin_infopopup_9', {})
+
   call term_sendkeys(buf, "\<Esc>")
   call StopVimInTerminal(buf)
   call delete('XtestInfoPopup')
@@ -3308,11 +3427,21 @@ func Test_popupwin_sign()
     call sign_place(3, 'PopUpSelected', 'Other', winbufnr, {'lnum': 1})
     " add sign to popup buffer, does not show
     call sign_place(4, 'Selected', 'Current', winbufnr, {'lnum': 2})
+
+    func SetOptions()
+      call setwinvar(g:winid, '&number', 1)
+      call setwinvar(g:winid, '&foldcolumn', 2)
+      call popup_settext(g:winid, 'a longer line to check the width')
+    endfunc
   END
   call writefile(lines, 'XtestPopupSign')
 
   let buf = RunVimInTerminal('-S XtestPopupSign', #{rows: 10})
   call VerifyScreenDump(buf, 'Test_popupwin_sign_1', {})
+
+  " set more options to check the width is adjusted
+  call term_sendkeys(buf, ":call SetOptions()\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_sign_2', {})
 
   call StopVimInTerminal(buf)
   call delete('XtestPopupSign')
@@ -3365,6 +3494,31 @@ func Test_popupwin_filter_input_multibyte()
   unlet g:bytes
 endfunc
 
+func Test_popupwin_filter_close_ctrl_c()
+  CheckScreendump
+
+  let lines =<< trim END
+      vsplit
+      set laststatus=2
+      set statusline=%!Statusline()
+
+      function Statusline() abort
+	  return '%<%f %h%m%r%=%-14.(%l,%c%V%) %P'
+      endfunction
+
+      call popup_create('test test test test...', {'filter': {-> 0}})
+  END
+  call writefile(lines, 'XtestPopupCtrlC')
+
+  let buf = RunVimInTerminal('-S XtestPopupCtrlC', #{rows: 10})
+
+  call term_sendkeys(buf, "\<C-C>")
+  call VerifyScreenDump(buf, 'Test_popupwin_ctrl_c', {})
+
+  call StopVimInTerminal(buf)
+  call delete('XtestPopupCorners')
+endfunc
+
 func Test_popupwin_atcursor_far_right()
   new
 
@@ -3373,6 +3527,11 @@ func Test_popupwin_atcursor_far_right()
   call setline(1, repeat('=', &columns))
   normal! ggg$
   let winid = popup_atcursor(repeat('x', 500), #{moved: 'any', border: []})
+
+  " 'signcolumn' was getting reset
+  call setwinvar(winid, '&signcolumn', 'yes')
+  call popup_setoptions(winid, {'zindex': 1000})
+  call assert_equal('yes', getwinvar(winid, '&signcolumn'))
 
   call popup_close(winid)
   bwipe!

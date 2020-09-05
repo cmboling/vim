@@ -676,8 +676,6 @@ spell_suggest(int count)
 	    mch_memmove(p, line, c);
 	    STRCPY(p + c, stp->st_word);
 	    STRCAT(p, sug.su_badptr + stp->st_orglen);
-	    ml_replace(curwin->w_cursor.lnum, p, FALSE);
-	    curwin->w_cursor.col = c;
 
 	    // For redo we use a change-word command.
 	    ResetRedobuff();
@@ -686,7 +684,10 @@ spell_suggest(int count)
 			    stp->st_wordlen + sug.su_badlen - stp->st_orglen);
 	    AppendCharToRedobuff(ESC);
 
-	    // After this "p" may be invalid.
+	    // "p" may be freed here
+	    ml_replace(curwin->w_cursor.lnum, p, FALSE);
+	    curwin->w_cursor.col = c;
+
 	    changed_bytes(curwin->w_cursor.lnum, c);
 	}
     }
@@ -1405,7 +1406,8 @@ suggest_trie_walk(
 	    tword[sp->ts_twordlen] = NUL;
 
 	    if (sp->ts_prefixdepth <= PFD_NOTSPECIAL
-					&& (sp->ts_flags & TSF_PREFIXOK) == 0)
+					&& (sp->ts_flags & TSF_PREFIXOK) == 0
+					&& pbyts != NULL)
 	    {
 		// There was a prefix before the word.  Check that the prefix
 		// can be used with this word.
@@ -3604,6 +3606,8 @@ check_suggestions(
     int		len;
     hlf_T	attr;
 
+    if (gap->ga_len == 0)
+	return;
     stp = &SUG(*gap, 0);
     for (i = gap->ga_len - 1; i >= 0; --i)
     {
@@ -3727,9 +3731,6 @@ cleanup_suggestions(
     int		maxscore,
     int		keep)		// nr of suggestions to keep
 {
-    suggest_T   *stp = &SUG(*gap, 0);
-    int		i;
-
     if (gap->ga_len > 0)
     {
 	// Sort the list.
@@ -3740,6 +3741,9 @@ cleanup_suggestions(
 	// displayed.
 	if (gap->ga_len > keep)
 	{
+	    int		i;
+	    suggest_T   *stp = &SUG(*gap, 0);
+
 	    for (i = keep; i < gap->ga_len; ++i)
 		vim_free(stp[i].st_word);
 	    gap->ga_len = keep;

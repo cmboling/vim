@@ -30,7 +30,7 @@ endfunc
 func Test_client_server()
   let cmd = GetVimCommand()
   if cmd == ''
-    return
+    throw 'GetVimCommand() failed'
   endif
   call Check_X11_Connection()
 
@@ -70,7 +70,7 @@ func Test_client_server()
     call WaitForAssert({-> assert_equal('maybe', remote_expr(name, "testvar", "", 2))})
   endif
 
-  call assert_fails('call remote_send("XXX", ":let testvar = ''yes''\<CR>")', 'E241')
+  call assert_fails('call remote_send("XXX", ":let testvar = ''yes''\<CR>")', 'E241:')
 
   " Expression evaluated locally.
   if v:servername == ''
@@ -84,7 +84,7 @@ func Test_client_server()
   call remote_send(v:servername, ":let g:testvar2 = 75\<CR>")
   call feedkeys('', 'x')
   call assert_equal(75, g:testvar2)
-  call assert_fails('let v = remote_expr(v:servername, "/2")', 'E449:')
+  call assert_fails('let v = remote_expr(v:servername, "/2")', ['E15:.*/2'])
 
   call remote_send(name, ":call server2client(expand('<client>'), 'got it')\<CR>", 'g:myserverid')
   call assert_equal('got it', g:myserverid->remote_read(2))
@@ -166,8 +166,10 @@ func Test_client_server()
 
   call assert_fails('call remote_startserver([])', 'E730:')
   call assert_fails("let x = remote_peek([])", 'E730:')
-  call assert_fails("let x = remote_read('vim10')", 'E277:')
-  call assert_fails("call server2client('abc', 'xyz')", 'E258:')
+  call assert_fails("let x = remote_read('vim10')",
+        \ has('unix') ? ['E573:.*vim10'] : 'E277:')
+  call assert_fails("call server2client('abc', 'xyz')",
+        \ has('unix') ? ['E573:.*abc'] : 'E258:')
 endfunc
 
 " Uncomment this line to get a debugging log

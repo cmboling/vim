@@ -207,9 +207,7 @@ func Test_highlight_eol_with_cursorline_vertsplit()
 endfunc
 
 func Test_highlight_eol_with_cursorline_rightleft()
-  if !has('rightleft')
-    return
-  endif
+  CheckFeature rightleft
 
   let [hiCursorLine, hi_ul, hi_bg] = HiCursorLine()
 
@@ -358,9 +356,7 @@ func Test_highlight_eol_with_cursorline_linewrap()
 endfunc
 
 func Test_highlight_eol_with_cursorline_sign()
-  if !has('signs')
-    return
-  endif
+  CheckFeature signs
 
   let [hiCursorLine, hi_ul, hi_bg] = HiCursorLine()
 
@@ -418,9 +414,7 @@ func Test_highlight_eol_with_cursorline_sign()
 endfunc
 
 func Test_highlight_eol_with_cursorline_breakindent()
-  if !has('linebreak')
-    return
-  endif
+  CheckFeature linebreak
 
   let [hiCursorLine, hi_ul, hi_bg] = HiCursorLine()
 
@@ -516,9 +510,7 @@ func Test_highlight_eol_on_diff()
 endfunc
 
 func Test_termguicolors()
-  if !exists('+termguicolors')
-    return
-  endif
+  CheckOption termguicolors
   if has('vtp') && !has('vcon') && !has('gui_running')
     " Win32: 'guicolors' doesn't work without virtual console.
     call assert_fails('set termguicolors', 'E954:')
@@ -758,6 +750,49 @@ func Test_highlight_RGB_color()
   call assert_equal('#110000', synIDattr(synIDtrans(hlID('MySearch')), 'fg#'))
   call assert_equal('#001100', synIDattr(synIDtrans(hlID('MySearch')), 'bg#'))
   call assert_equal('#000011', synIDattr(synIDtrans(hlID('MySearch')), 'sp#'))
+  hi clear
+endfunc
+
+" Test for using default highlighting group
+func Test_highlight_default()
+  highlight MySearch ctermfg=7
+  highlight default MySearch ctermfg=5
+  let hlSearch = HighlightArgs('MySearch')
+  call assert_match('ctermfg=7', hlSearch)
+
+  highlight default QFName ctermfg=3
+  call assert_match('ctermfg=3', HighlightArgs('QFName'))
+  hi clear
+endfunc
+
+" Test for 'ctermul in a highlight group
+func Test_highlight_ctermul()
+  CheckNotGui
+  call assert_notmatch('ctermul=', HighlightArgs('Normal'))
+  highlight Normal ctermul=3
+  call assert_match('ctermul=3', HighlightArgs('Normal'))
+  highlight Normal ctermul=NONE
+endfunc
+
+" Test for specifying 'start' and 'stop' in a highlight group
+func Test_highlight_start_stop()
+  hi HlGrp1 start=<Esc>[27h;<Esc>[<Space>r;
+  call assert_match("start=^[[27h;^[[ r;", HighlightArgs('HlGrp1'))
+  hi HlGrp1 start=NONE
+  call assert_notmatch("start=", HighlightArgs('HlGrp1'))
+  hi HlGrp2 stop=<Esc>[27h;<Esc>[<Space>r;
+  call assert_match("stop=^[[27h;^[[ r;", HighlightArgs('HlGrp2'))
+  hi HlGrp2 stop=NONE
+  call assert_notmatch("stop=", HighlightArgs('HlGrp2'))
+  hi clear
+endfunc
+
+" Test for setting various 'term' attributes
+func Test_highlight_term_attr()
+  hi HlGrp3 term=bold,underline,undercurl,strikethrough,reverse,italic,standout
+  call assert_equal('hi HlGrp3          term=bold,standout,underline,undercurl,italic,reverse,strikethrough', HighlightArgs('HlGrp3'))
+  hi HlGrp3 term=NONE
+  call assert_equal('hi HlGrp3          cleared', HighlightArgs('HlGrp3'))
   hi clear
 endfunc
 

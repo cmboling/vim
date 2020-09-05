@@ -817,6 +817,7 @@ typedef struct sign_attrs_S {
     char_u	*sat_text;
     int		sat_texthl;
     int		sat_linehl;
+    int		sat_priority;
 } sign_attrs_T;
 
 #if defined(FEAT_SIGNS) || defined(PROTO)
@@ -1250,6 +1251,7 @@ typedef struct hashtable_S
 				// array is "ht_mask" + 1)
     long_u	ht_used;	// number of items used
     long_u	ht_filled;	// number of items used + removed
+    int		ht_changed;	// incremented when adding or removing an item
     int		ht_locked;	// counter for hash_lock()
     int		ht_error;	// when set growing failed, can't add more
 				// items before growing works
@@ -1532,6 +1534,13 @@ struct blobvar_S
 typedef int (*cfunc_T)(int argcount, typval_T *argvars, typval_T *rettv, void *state);
 typedef void (*cfunc_free_T)(void *state);
 
+// type of getline() last argument
+typedef enum {
+    GETLINE_NONE,	    // do not concatenate any lines
+    GETLINE_CONCAT_CONT,    // concatenate continuation lines
+    GETLINE_CONCAT_ALL	    // concatenate continuation and Vim9 # comment lines
+} getline_opt_T;
+
 #if defined(FEAT_EVAL) || defined(PROTO)
 typedef struct funccall_S funccall_T;
 
@@ -1539,11 +1548,13 @@ typedef struct funccall_S funccall_T;
 typedef enum {
     UF_NOT_COMPILED,
     UF_TO_BE_COMPILED,
+    UF_COMPILING,
     UF_COMPILED
 } def_status_T;
 
 /*
  * Structure to hold info for a user function.
+ * When adding a field check copy_func().
  */
 typedef struct
 {
@@ -1591,7 +1602,9 @@ typedef struct
     int		uf_tml_execed;	// line being timed was executed
 # endif
     sctx_T	uf_script_ctx;	// SCTX where function was defined,
-				// used for s: variables
+				// used for s: variables; sc_version changed
+				// for :function
+    int		uf_script_ctx_version;  // original sc_version of SCTX
     int		uf_refcount;	// reference count, see func_name_refcount()
 
     funccall_T	*uf_scoped;	// l: local variables for closure
@@ -1616,6 +1629,7 @@ typedef struct
 #define FC_NOARGS   0x200	// no a: variables in lambda
 #define FC_VIM9	    0x400	// defined in vim9 script file
 #define FC_CFUNC    0x800	// defined as Lua C func
+#define FC_COPY	    0x1000	// copy of another function by copy_func()
 
 #define MAX_FUNC_ARGS	20	// maximum number of function arguments
 #define VAR_SHORT_LEN	20	// short variable name length
@@ -1762,16 +1776,22 @@ typedef struct {
     int		eval_break_count;   // nr of line breaks consumed
 
     // copied from exarg_T when "getline" is "getsourceline". Can be NULL.
-    char_u	*(*eval_getline)(int, void *, int, int);
+    char_u	*(*eval_getline)(int, void *, int, getline_opt_T);
     void	*eval_cookie;	    // argument for eval_getline()
+
+    // used when compiling a :def function, NULL otherwise
+    cctx_T	*eval_cctx;
 
     // Used to collect lines while parsing them, so that they can be
     // concatenated later.  Used when "eval_ga.ga_itemsize" is not zero.
     // "eval_ga.ga_data" is a list of pointers to lines.
     garray_T	eval_ga;
 
-    // pointer to the line obtained with getsourceline()
+    // pointer to the last line obtained with getsourceline()
     char_u	*eval_tofree;
+
+    // pointer to the lines concatenated for a lambda.
+    char_u	*eval_tofree_lambda;
 } evalarg_T;
 
 // Flags for expression evaluation.
@@ -1905,6 +1925,9 @@ typedef struct {
 	AutoPatCmd *aucmd;  // autocommand info
 	except_T   *except; // exception info
     } es_info;
+#if defined(FEAT_EVAL)
+    scid_T	es_save_sid;	    // saved sc_sid when calling function
+#endif
 } estack_T;
 
 // Information returned by get_tty_info().
@@ -2514,9 +2537,6 @@ struct file_buffer
     int		b_dev_valid;	// TRUE when b_dev has a valid number
     dev_t	b_dev;		// device number
     ino_t	b_ino;		// inode number
-#endif
-#ifdef FEAT_CW_EDITOR
-    FSSpec	b_FSSpec;	// MacOS File Identification
 #endif
 #ifdef VMS
     char	 b_fab_rfm;	// Record format
@@ -3291,6 +3311,7 @@ struct window_S
     int		w_minwidth;	    // "minwidth" for popup window
     int		w_maxheight;	    // "maxheight" for popup window
     int		w_maxwidth;	    // "maxwidth" for popup window
+    int		w_maxwidth_opt;	    // maxwidth from option
     int		w_wantline;	    // "line" for popup window
     int		w_wantcol;	    // "col" for popup window
     int		w_firstline;	    // "firstline" for popup window
@@ -3773,15 +3794,6 @@ struct VimMenu
 # ifdef FEAT_TOOLBAR
     BPictureButton *button;
 # endif
-#endif
-#ifdef FEAT_GUI_MAC
-//  MenuHandle	id;
-//  short	index;		    // the item index within the father menu
-    short	menu_id;	    // the menu id to which this item belongs
-    short	submenu_id;	    // the menu id of the children (could be
-				    // get through some tricks)
-    MenuHandle	menu_handle;
-    MenuHandle	submenu_handle;
 #endif
 #ifdef FEAT_GUI_PHOTON
     PtWidget_t	*id;

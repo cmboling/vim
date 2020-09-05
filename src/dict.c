@@ -703,6 +703,21 @@ dict_get_number_check(dict_T *d, char_u *key)
 }
 
 /*
+ * Get a bool item (number or true/false) from a dictionary.
+ * Returns "def" if the entry doesn't exist.
+ */
+    varnumber_T
+dict_get_bool(dict_T *d, char_u *key, int def)
+{
+    dictitem_T	*di;
+
+    di = dict_find(d, key, -1);
+    if (di == NULL)
+	return def;
+    return tv_get_bool(&di->di_tv);
+}
+
+/*
  * Return an allocated string with the string representation of a Dictionary.
  * May return NULL.
  */
@@ -781,14 +796,14 @@ get_literal_key(char_u **arg, typval_T *tv)
     tv->v_type = VAR_STRING;
     tv->vval.v_string = vim_strnsave(*arg, p - *arg);
 
-    *arg = skipwhite(p);
+    *arg = p;
     return OK;
 }
 
 /*
  * Allocate a variable for a Dictionary and fill it from "*arg".
+ * "*arg" points to the "{".
  * "literal" is TRUE for #{key: val}
- * "flags" can have EVAL_EVALUATE and other EVAL_ flags.
  * Return OK or FAIL.  Returns NOTDONE for {expr}.
  */
     int
@@ -803,7 +818,7 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
     dictitem_T	*item;
     char_u	*start = skipwhite(*arg + 1);
     char_u	buf[NUMBUFLEN];
-    int		vim9script = current_sctx.sc_version == SCRIPT_VERSION_VIM9;
+    int		vim9script = in_vim9script();
     int		had_comma;
 
     /*
@@ -817,7 +832,7 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
     {
 	if (eval1(&start, &tv, NULL) == FAIL)	// recursive!
 	    return FAIL;
-	if (*start == '}')
+	if (*skipwhite(start) == '}')
 	    return NOTDONE;
     }
 
@@ -838,10 +853,19 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 		: eval1(arg, &tvkey, evalarg)) == FAIL)	// recursive!
 	    goto failret;
 
+	// the colon should come right after the key, but this wasn't checked
+	// previously, so only require it in Vim9 script.
+	if (!vim9script)
+	    *arg = skipwhite(*arg);
 	if (**arg != ':')
 	{
 	    if (evaluate)
-		semsg(_(e_missing_dict_colon), *arg);
+	    {
+		if (*skipwhite(*arg) == ':')
+		    semsg(_(e_no_white_space_allowed_before_str), ":");
+		else
+		    semsg(_(e_missing_dict_colon), *arg);
+	    }
 	    clear_tv(&tvkey);
 	    goto failret;
 	}
@@ -857,7 +881,7 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 	}
 	if (vim9script && (*arg)[1] != NUL && !VIM_ISWHITE((*arg)[1]))
 	{
-	    semsg(_(e_white_after), ":");
+	    semsg(_(e_white_space_required_after_str), ":");
 	    clear_tv(&tvkey);
 	    goto failret;
 	}
@@ -891,13 +915,16 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 	}
 	clear_tv(&tvkey);
 
-	// the comma must come after the value
+	// the comma should come right after the value, but this wasn't checked
+	// previously, so only require it in Vim9 script.
+	if (!vim9script)
+	    *arg = skipwhite(*arg);
 	had_comma = **arg == ',';
 	if (had_comma)
 	{
 	    if (vim9script && (*arg)[1] != NUL && !VIM_ISWHITE((*arg)[1]))
 	    {
-		semsg(_(e_white_after), ",");
+		semsg(_(e_white_space_required_after_str), ",");
 		goto failret;
 	    }
 	    *arg = skipwhite(*arg + 1);
@@ -910,7 +937,12 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 	if (!had_comma)
 	{
 	    if (evaluate)
-		semsg(_(e_missing_dict_comma), *arg);
+	    {
+		if (**arg == ',')
+		    semsg(_(e_no_white_space_allowed_before_str), ",");
+		else
+		    semsg(_(e_missing_dict_comma), *arg);
+	    }
 	    goto failret;
 	}
     }
@@ -959,7 +991,7 @@ dict_extend(dict_T *d1, dict_T *d2, char_u *action)
 		// Check the key to be valid when adding to any scope.
 		if (d1->dv_scope == VAR_DEF_SCOPE
 			&& HI2DI(hi2)->di_tv.v_type == VAR_FUNC
-			&& var_check_func_name(hi2->hi_key, di1 == NULL))
+			&& var_wrong_func_name(hi2->hi_key, di1 == NULL))
 		    break;
 		if (!valid_varname(hi2->hi_key))
 		    break;

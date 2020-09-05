@@ -54,6 +54,7 @@ let s:filename_checks = {
     \ 'acedb': ['file.wrm'],
     \ 'ada': ['file.adb', 'file.ads', 'file.ada', 'file.gpr'],
     \ 'ahdl': ['file.tdf'],
+    \ 'aidl': ['file.aidl'],
     \ 'alsaconf': ['.asoundrc', '/usr/share/alsa/alsa.conf', '/etc/asound.conf'],
     \ 'aml': ['file.aml'],
     \ 'ampl': ['file.run'],
@@ -72,8 +73,9 @@ let s:filename_checks = {
     \ 'autoit': ['file.au3'],
     \ 'automake': ['GNUmakefile.am'],
     \ 'ave': ['file.ave'],
-    \ 'awk': ['file.awk'],
+    \ 'awk': ['file.awk', 'file.gawk'],
     \ 'b': ['file.mch', 'file.ref', 'file.imp'],
+    \ 'bzl': ['file.bazel', 'file.bzl', 'WORKSPACE'],
     \ 'bc': ['file.bc'],
     \ 'bdf': ['file.bdf'],
     \ 'bib': ['file.bib'],
@@ -139,7 +141,7 @@ let s:filename_checks = {
     \ 'dnsmasq': ['/etc/dnsmasq.conf'],
     \ 'dockerfile': ['Containerfile', 'Dockerfile', 'file.Dockerfile'],
     \ 'dosbatch': ['file.bat', 'file.sys'],
-    \ 'dosini': ['.editorconfig', '/etc/pacman.conf', '/etc/yum.conf', 'file.ini'],
+    \ 'dosini': ['.editorconfig', '/etc/pacman.conf', '/etc/yum.conf', 'file.ini', 'npmrc', '.npmrc', 'php.ini', 'php.ini-5'],
     \ 'dot': ['file.dot', 'file.gv'],
     \ 'dracula': ['file.drac', 'file.drc', 'filelvs', 'filelpe'],
     \ 'dsl': ['file.dsl'],
@@ -471,6 +473,7 @@ let s:filename_checks = {
     \ 'uc': ['file.uc'],
     \ 'udevconf': ['/etc/udev/udev.conf'],
     \ 'udevperm': ['/etc/udev/permissions.d/file.permissions'],
+    \ 'udevrules': ['/etc/udev/rules.d/file.rules', '/usr/lib/udev/rules.d/file.rules', '/lib/udev/rules.d/file.rules'],
     \ 'uil': ['file.uit', 'file.uil'],
     \ 'updatedb': ['/etc/updatedb.conf'],
     \ 'upstart': ['/usr/share/upstart/file.conf', '/usr/share/upstart/file.override', '/etc/init/file.conf', '/etc/init/file.override', '/.init/file.conf', '/.init/file.override', '/.config/upstart/file.conf', '/.config/upstart/file.override'],
@@ -525,6 +528,7 @@ let s:filename_checks = {
 
 let s:filename_case_checks = {
     \ 'modula2': ['file.DEF', 'file.MOD'],
+    \ 'bzl': ['file.BUILD', 'BUILD'],
     \ }
 
 func CheckItems(checks)
@@ -596,7 +600,8 @@ let s:script_checks = {
       \ 'bc': [['#!/path/bc']],
       \ 'sed': [['#!/path/sed']],
       \ 'ocaml': [['#!/path/ocaml']],
-      \ 'awk': [['#!/path/awk']],
+      \ 'awk': [['#!/path/awk'],
+      \         ['#!/path/gawk']],
       \ 'wml': [['#!/path/wml']],
       \ 'scheme': [['#!/path/scheme']],
       \ 'cfengine': [['#!/path/cfengine']],

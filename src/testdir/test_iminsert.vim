@@ -1,3 +1,5 @@
+" Test for 'iminsert'
+
 source view_util.vim
 source check.vim
 
@@ -27,7 +29,7 @@ func Test_iminsert2()
   set imactivatefunc=
   set imstatusfunc=
 
-  let expected = has('gui_running') ? 0 : 1
+  let expected = (has('win32') && has('gui_running')) ? 0 : 1
   call assert_equal(expected, s:imactivatefunc_called)
   call assert_equal(expected, s:imstatusfunc_called)
 endfunc
@@ -35,13 +37,10 @@ endfunc
 func Test_getimstatus()
   if has('win32')
     CheckFeature multi_byte_ime
-  elseif !has('gui_mac')
+  else
     CheckFeature xim
   endif
-  if has('gui_running')
-    if !has('win32')
-      throw 'Skipped: running in the GUI, only works on MS-Windows'
-    endif
+  if has('win32') && has('gui_running')
     set imactivatefunc=
     set imstatusfunc=
   else
@@ -88,12 +87,11 @@ func Test_iminsert_toggle()
   CheckGui
   if has('win32')
     CheckFeature multi_byte_ime
-  elseif !has('gui_mac')
+  else
     CheckFeature xim
   endif
   if has('gui_running') && !has('win32')
-    " this works only in Win32 GUI version (for some reason)
-    return
+    throw 'Skipped: works only in Win32 GUI version (for some reason)'
   endif
   new
   let save_imdisable = &imdisable

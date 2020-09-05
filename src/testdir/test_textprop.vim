@@ -211,7 +211,28 @@ func Test_prop_find()
 
   call prop_clear(1,6)
   call prop_type_delete('prop_name')
+
+  bwipe!
 endfunc
+
+def Test_prop_find2()
+  # Multiple props per line, start on the first, should find the second.
+  new
+  ['the quikc bronw fox jumsp over the layz dog']->repeat(2)->setline(1)
+  prop_type_add('misspell', #{highlight: 'ErrorMsg'})
+  for lnum in [1, 2]
+    for col in [8, 14, 24, 38]
+      prop_add(lnum, col, #{type: 'misspell', length: 2})
+    endfor
+  endfor
+  cursor(1, 8)
+  let expected = {'lnum': 1, 'id': 0, 'col': 14, 'end': 1, 'type': 'misspell', 'length': 2, 'start': 1}
+  let result = prop_find(#{type: 'misspell', skipstart: true}, 'f')
+  assert_equal(expected, result)
+
+  prop_type_delete('misspell')
+  bwipe!
+enddef
 
 func Test_prop_find_smaller_len_than_match_col()
   new
@@ -293,8 +314,8 @@ func Test_prop_remove()
   unlet props[3]
   call assert_equal(props, prop_list(1))
 
-  call assert_fails("call prop_remove({'id': 11, 'both': 1})", 'E860')
-  call assert_fails("call prop_remove({'type': 'three', 'both': 1})", 'E860')
+  call assert_fails("call prop_remove({'id': 11, 'both': 1})", 'E860:')
+  call assert_fails("call prop_remove({'type': 'three', 'both': 1})", 'E860:')
 
   call DeletePropTypes()
   bwipe!
@@ -1214,20 +1235,20 @@ func Test_prop_func_invalid_args()
   call assert_fails('call prop_clear(1, 2, [])', 'E715:')
   call assert_fails('call prop_clear(-1, 2)', 'E16:')
   call assert_fails('call prop_find(test_null_dict())', 'E474:')
-  call assert_fails('call prop_find({"bufnr" : []})', 'E158:')
+  call assert_fails('call prop_find({"bufnr" : []})', 'E730:')
   call assert_fails('call prop_find({})', 'E968:')
   call assert_fails('call prop_find({}, "x")', 'E474:')
   call assert_fails('call prop_find({"lnum" : -2})', 'E16:')
   call assert_fails('call prop_list(1, [])', 'E715:')
-  call assert_fails('call prop_list(-1 , {})', 'E16:')
+  call assert_fails('call prop_list(-1, {})', 'E16:')
   call assert_fails('call prop_remove([])', 'E474:')
   call assert_fails('call prop_remove({}, -2)', 'E16:')
   call assert_fails('call prop_remove({})', 'E968:')
-  call assert_fails('call prop_type_add([], {})', 'E474:')
+  call assert_fails('call prop_type_add([], {})', 'E730:')
   call assert_fails("call prop_type_change('long', {'xyz' : 10})", 'E971:')
-  call assert_fails("call prop_type_delete([])", 'E474:')
+  call assert_fails("call prop_type_delete([])", 'E730:')
   call assert_fails("call prop_type_delete('xyz', [])", 'E715:')
-  call assert_fails("call prop_type_get([])", 'E474:')
+  call assert_fails("call prop_type_get([])", 'E730:')
   call assert_fails("call prop_type_get('', [])", 'E474:')
   call assert_fails("call prop_type_list([])", 'E715:')
 endfunc

@@ -68,7 +68,7 @@ estack_push(etype_T type, char_u *name, long lnum)
 /*
  * Add a user function to the execution stack.
  */
-    void
+    estack_T *
 estack_push_ufunc(ufunc_T *ufunc, long lnum)
 {
     estack_T *entry = estack_push(ETYPE_UFUNC,
@@ -76,6 +76,7 @@ estack_push_ufunc(ufunc_T *ufunc, long lnum)
 				  ? ufunc->uf_name_exp : ufunc->uf_name, lnum);
     if (entry != NULL)
 	entry->es_info.ufunc = ufunc;
+    return entry;
 }
 
 /*
@@ -97,69 +98,81 @@ estack_top_is_ufunc(ufunc_T *ufunc, long lnum)
 #endif
 
 /*
- * Take an item off of the execution stack.
+ * Take an item off of the execution stack and return it.
  */
-    void
+    estack_T *
 estack_pop(void)
 {
-    if (exestack.ga_len > 1)
-	--exestack.ga_len;
+    if (exestack.ga_len == 0)
+	return NULL;
+    --exestack.ga_len;
+    return ((estack_T *)exestack.ga_data) + exestack.ga_len;
 }
 
 /*
  * Get the current value for <sfile> in allocated memory.
+ * "is_sfile" is TRUE for <sfile> itself.
  */
     char_u *
-estack_sfile(void)
+estack_sfile(int is_sfile UNUSED)
 {
     estack_T	*entry;
 #ifdef FEAT_EVAL
+    garray_T	ga;
     size_t	len;
     int		idx;
-    char	*res;
-    size_t	done;
+    etype_T	last_type = ETYPE_SCRIPT;
+    char	*type_name;
 #endif
 
     entry = ((estack_T *)exestack.ga_data) + exestack.ga_len - 1;
-    if (entry->es_name == NULL)
-	return NULL;
 #ifdef FEAT_EVAL
-    if (entry->es_info.ufunc == NULL)
+    if (is_sfile && entry->es_type != ETYPE_UFUNC)
 #endif
+    {
+	if (entry->es_name == NULL)
+	    return NULL;
 	return vim_strsave(entry->es_name);
-
+    }
 #ifdef FEAT_EVAL
+    // Give information about each stack entry up to the root.
     // For a function we compose the call stack, as it was done in the past:
     //   "function One[123]..Two[456]..Three"
-    len = STRLEN(entry->es_name) + 10;
-    for (idx = exestack.ga_len - 2; idx >= 0; --idx)
+    ga_init2(&ga, sizeof(char), 100);
+    for (idx = 0; idx < exestack.ga_len; ++idx)
     {
 	entry = ((estack_T *)exestack.ga_data) + idx;
-	if (entry->es_name == NULL || entry->es_info.ufunc == NULL)
+	if (entry->es_name != NULL)
 	{
-	    ++idx;
-	    break;
+	    len = STRLEN(entry->es_name) + 15;
+	    type_name = "";
+	    if (entry->es_type != last_type)
+	    {
+		switch (entry->es_type)
+		{
+		    case ETYPE_SCRIPT: type_name = "script "; break;
+		    case ETYPE_UFUNC: type_name = "function "; break;
+		    default: type_name = ""; break;
+		}
+		last_type = entry->es_type;
+	    }
+	    len += STRLEN(type_name);
+	    if (ga_grow(&ga, (int)len) == FAIL)
+		break;
+	    if (idx == exestack.ga_len - 1 || entry->es_lnum == 0)
+		// For the bottom entry: do not add the line number, it is used
+		// in <slnum>.  Also leave it out when the number is not set.
+		vim_snprintf((char *)ga.ga_data + ga.ga_len, len, "%s%s%s",
+				type_name, entry->es_name,
+				idx == exestack.ga_len - 1 ? "" : "..");
+	    else
+		vim_snprintf((char *)ga.ga_data + ga.ga_len, len, "%s%s[%ld]..",
+				    type_name, entry->es_name, entry->es_lnum);
+	    ga.ga_len += (int)STRLEN((char *)ga.ga_data + ga.ga_len);
 	}
-	len += STRLEN(entry->es_name) + 15;
     }
 
-    res = (char *)alloc((int)len);
-    if (res != NULL)
-    {
-	STRCPY(res, "function ");
-	while (idx < exestack.ga_len - 1)
-	{
-	    done = STRLEN(res);
-	    entry = ((estack_T *)exestack.ga_data) + idx;
-	    vim_snprintf(res + done, len - done, "%s[%ld]..",
-					       entry->es_name, entry->es_lnum);
-	    ++idx;
-	}
-	done = STRLEN(res);
-	entry = ((estack_T *)exestack.ga_data) + idx;
-	vim_snprintf(res + done, len - done, "%s", entry->es_name);
-    }
-    return (char_u *)res;
+    return (char_u *)ga.ga_data;
 #endif
 }
 
@@ -1052,7 +1065,8 @@ source_level(void *cookie)
 }
 
 /*
- * Return the readahead line.
+ * Return the readahead line. Note that the pointer may become invalid when
+ * getting the next line, if it's concatenated with the next one.
  */
     char_u *
 source_nextline(void *cookie)
@@ -1503,7 +1517,7 @@ ex_scriptnames(exarg_T *eap)
     if (eap->addr_count > 0)
     {
 	// :script {scriptId}: edit the script
-	if (eap->line2 < 1 || eap->line2 > script_items.ga_len)
+	if (!SCRIPT_ID_VALID(eap->line2))
 	    emsg(_(e_invarg));
 	else
 	{
@@ -1590,7 +1604,9 @@ free_autoload_scriptnames(void)
 #endif
 
     linenr_T
-get_sourced_lnum(char_u *(*fgetline)(int, void *, int, int), void *cookie)
+get_sourced_lnum(
+	char_u *(*fgetline)(int, void *, int, getline_opt_T),
+	void *cookie)
 {
     return fgetline == getsourceline
 			? ((struct source_cookie *)cookie)->sourcing_lnum
@@ -1710,7 +1726,11 @@ get_one_sourceline(struct source_cookie *sp)
  * Return NULL for end-of-file or some error.
  */
     char_u *
-getsourceline(int c UNUSED, void *cookie, int indent UNUSED, int do_concat)
+getsourceline(
+	int c UNUSED,
+	void *cookie,
+	int indent UNUSED,
+	getline_opt_T options)
 {
     struct source_cookie *sp = (struct source_cookie *)cookie;
     char_u		*line;
@@ -1751,7 +1771,8 @@ getsourceline(int c UNUSED, void *cookie, int indent UNUSED, int do_concat)
 
     // Only concatenate lines starting with a \ when 'cpoptions' doesn't
     // contain the 'C' flag.
-    if (line != NULL && do_concat && vim_strchr(p_cpo, CPO_CONCAT) == NULL)
+    if (line != NULL && options != GETLINE_NONE
+				      && vim_strchr(p_cpo, CPO_CONCAT) == NULL)
     {
 	// compensate for the one line read-ahead
 	--sp->sourcing_lnum;
@@ -1760,10 +1781,17 @@ getsourceline(int c UNUSED, void *cookie, int indent UNUSED, int do_concat)
 	// backslash. We always need to read the next line, keep it in
 	// sp->nextline.
 	/* Also check for a comment in between continuation lines: "\ */
+	// Also check for a Vim9 comment and empty line.
 	sp->nextline = get_one_sourceline(sp);
 	if (sp->nextline != NULL
 		&& (*(p = skipwhite(sp->nextline)) == '\\'
-			      || (p[0] == '"' && p[1] == '\\' && p[2] == ' ')))
+			      || (p[0] == '"' && p[1] == '\\' && p[2] == ' ')
+#ifdef FEAT_EVAL
+			      || (in_vim9script()
+				      && options == GETLINE_CONCAT_ALL
+				      && (*p == NUL || vim9_comment_start(p)))
+#endif
+			      ))
 	{
 	    garray_T    ga;
 
@@ -1791,8 +1819,15 @@ getsourceline(int c UNUSED, void *cookie, int indent UNUSED, int do_concat)
 		    }
 		    ga_concat(&ga, p + 1);
 		}
-		else if (p[0] != '"' || p[1] != '\\' || p[2] != ' ')
+		else if (!(p[0] == '"' && p[1] == '\\' && p[2] == ' ')
+#ifdef FEAT_EVAL
+			&& !(in_vim9script()
+				&& options == GETLINE_CONCAT_ALL
+				&& (*p == NUL || vim9_comment_start(p)))
+#endif
+			)
 		    break;
+		/* drop a # comment or "\ comment line */
 	    }
 	    ga_append(&ga, NUL);
 	    vim_free(line);
@@ -1873,9 +1908,9 @@ ex_scriptversion(exarg_T *eap UNUSED)
 	emsg(_("E984: :scriptversion used outside of a sourced file"));
 	return;
     }
-    if (current_sctx.sc_version == SCRIPT_VERSION_VIM9)
+    if (in_vim9script())
     {
-	emsg(_("E1040: Cannot use :scriptversion after :vim9script"));
+	emsg(_(e_cannot_use_scriptversion_after_vim9script));
 	return;
     }
 
@@ -1942,7 +1977,7 @@ do_finish(exarg_T *eap, int reanimate)
  */
     int
 source_finished(
-    char_u	*(*fgetline)(int, void *, int, int),
+    char_u	*(*fgetline)(int, void *, int, getline_opt_T),
     void	*cookie)
 {
     return (getline_equal(fgetline, cookie, getsourceline)
@@ -1966,7 +2001,7 @@ autoload_name(char_u *name)
     if (scriptname == NULL)
 	return NULL;
     STRCPY(scriptname, "autoload/");
-    STRCAT(scriptname, name);
+    STRCAT(scriptname, name[0] == 'g' && name[1] == ':' ? name + 2: name);
     for (p = scriptname + 9; (p = vim_strchr(p, AUTOLOAD_CHAR)) != NULL;
 								    q = p, ++p)
 	*p = '/';
@@ -1987,6 +2022,7 @@ script_autoload(
     char_u	*scriptname, *tofree;
     int		ret = FALSE;
     int		i;
+    int		ret_sid;
 
     // If there is no '#' after name[0] there is no package name.
     p = vim_strchr(name, AUTOLOAD_CHAR);
@@ -2014,7 +2050,8 @@ script_autoload(
 	}
 
 	// Try loading the package from $VIMRUNTIME/autoload/<name>.vim
-	if (source_runtime(scriptname, 0) == OK)
+	// Use "ret_sid" to avoid loading the same script again.
+	if (source_in_path(p_rtp, scriptname, 0, &ret_sid) == OK)
 	    ret = TRUE;
     }
 

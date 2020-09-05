@@ -10,9 +10,8 @@ endfunc
 
 " Tests for 'directory' option.
 func Test_swap_directory()
-  if !has("unix")
-    return
-  endif
+  CheckUnix
+
   let content = ['start of testfile',
 	      \ 'line 2 Abcdefghij',
 	      \ 'line 3 Abcdefghij',
@@ -56,9 +55,8 @@ func Test_swap_directory()
 endfunc
 
 func Test_swap_group()
-  if !has("unix")
-    return
-  endif
+  CheckUnix
+
   let groups = split(system('groups'))
   if len(groups) <= 1
     throw 'Skipped: need at least two groups, got ' . string(groups)
@@ -375,6 +373,34 @@ func Test_swap_prompt_splitwin()
   call StopVimInTerminal(buf)
   %bwipe!
   call delete('Xfile1')
+endfunc
+
+func Test_swap_symlink()
+  CheckUnix
+
+  call writefile(['text'], 'Xtestfile')
+  silent !ln -s -f Xtestfile Xtestlink
+
+  set dir=.
+
+  " Test that swap file uses the name of the file when editing through a
+  " symbolic link (so that editing the file twice is detected)
+  edit Xtestlink
+  call assert_match('Xtestfile\.swp$', s:swapname())
+  bwipe!
+
+  call mkdir('Xswapdir')
+  exe 'set dir=' . getcwd() . '/Xswapdir//'
+
+  " Check that this also works when 'directory' ends with '//'
+  edit Xtestlink
+  call assert_match('Xtestfile\.swp$', s:swapname())
+  bwipe!
+
+  set dir&
+  call delete('Xtestfile')
+  call delete('Xtestlink')
+  call delete('Xswapdir', 'rf')
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

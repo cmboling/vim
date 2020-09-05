@@ -13,7 +13,7 @@
 
 #include "vim.h"
 
-#if defined(__TANDEM) || defined(__MINT__)
+#if defined(__TANDEM)
 # include <limits.h>		// for SSIZE_MAX
 #endif
 #if defined(UNIX) && defined(FEAT_EVAL)
@@ -23,6 +23,11 @@
 
 // Is there any system that doesn't have access()?
 #define USE_MCH_ACCESS
+
+#if defined(__hpux) && !defined(HAVE_DIRFD)
+# define dirfd(x) ((x)->__dd_fd)
+# define HAVE_DIRFD
+#endif
 
 static char_u *next_fenc(char_u **pp, int *alloced);
 #ifdef FEAT_EVAL
@@ -52,10 +57,14 @@ filemess(
     if (msg_silent != 0)
 	return;
     msg_add_fname(buf, name);	    // put file name in IObuff with quotes
+
     // If it's extremely long, truncate it.
-    if (STRLEN(IObuff) > IOSIZE - 80)
-	IObuff[IOSIZE - 80] = NUL;
-    STRCAT(IObuff, s);
+    if (STRLEN(IObuff) > IOSIZE - 100)
+	IObuff[IOSIZE - 100] = NUL;
+
+    // Avoid an over-long translation to cause trouble.
+    STRNCAT(IObuff, s, 99);
+
     /*
      * For the first message may have to start a new line.
      * For further ones overwrite the previous one, reset msg_scroll before
@@ -398,11 +407,6 @@ readfile(
 	     * Setting the bits is done below, after creating the swap file.
 	     */
 	    swap_mode = (st.st_mode & 0644) | 0600;
-#endif
-#ifdef FEAT_CW_EDITOR
-	    // Get the FSSpec on MacOS
-	    // TODO: Update it properly when the buffer name changes
-	    (void)GetFSSpecFromPath(curbuf->b_ffname, &curbuf->b_FSSpec);
 #endif
 #ifdef VMS
 	    curbuf->b_fab_rfm = st.st_fab_rfm;
@@ -3035,13 +3039,13 @@ msg_add_lines(
 	*p++ = ' ';
     if (shortmess(SHM_LINES))
 	vim_snprintf((char *)p, IOSIZE - (p - IObuff),
-		"%ldL, %lldC", lnum, (varnumber_T)nchars);
+		"%ldL, %lldB", lnum, (varnumber_T)nchars);
     else
     {
 	sprintf((char *)p, NGETTEXT("%ld line, ", "%ld lines, ", lnum), lnum);
 	p += STRLEN(p);
 	vim_snprintf((char *)p, IOSIZE - (p - IObuff),
-		NGETTEXT("%lld character", "%lld characters", nchars),
+		NGETTEXT("%lld byte", "%lld bytes", nchars),
 		(varnumber_T)nchars);
     }
 }
@@ -3385,7 +3389,6 @@ shorten_fnames(int force)
 
 #if (defined(FEAT_DND) && defined(FEAT_GUI_GTK)) \
 	|| defined(FEAT_GUI_MSWIN) \
-	|| defined(FEAT_GUI_MAC) \
 	|| defined(FEAT_GUI_HAIKU) \
 	|| defined(PROTO)
 /*

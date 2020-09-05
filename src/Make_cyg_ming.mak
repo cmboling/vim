@@ -38,6 +38,9 @@ DEBUG=no
 # set to yes to create a mapfile
 #MAP=yes
 
+# set to yes to measure code coverage
+COVERAGE=no
+
 # set to SIZE for size, SPEED for speed, MAXSPEED for maximum optimization
 OPTIMIZE=MAXSPEED
 
@@ -589,6 +592,8 @@ ifdef PYTHON3
 CFLAGS += -DFEAT_PYTHON3
  ifeq (yes, $(DYNAMIC_PYTHON3))
 CFLAGS += -DDYNAMIC_PYTHON3 -DDYNAMIC_PYTHON3_DLL=\"$(DYNAMIC_PYTHON3_DLL)\"
+ else
+CFLAGS += -DPYTHON3_DLL=\"$(DYNAMIC_PYTHON3_DLL)\"
  endif
 endif
 
@@ -699,6 +704,11 @@ CFLAGS += -O2
 LFLAGS += -s
 endif
 
+ifeq ($(COVERAGE),yes)
+CFLAGS += --coverage
+LFLAGS += --coverage
+endif
+
 LIB = -lkernel32 -luser32 -lgdi32 -ladvapi32 -lcomdlg32 -lcomctl32 -lnetapi32 -lversion
 GUIOBJ =  $(OUTDIR)/gui.o $(OUTDIR)/gui_w32.o $(OUTDIR)/gui_beval.o
 CUIOBJ = $(OUTDIR)/iscygpty.o
@@ -745,12 +755,14 @@ OBJ = \
 	$(OUTDIR)/gui_xim.o \
 	$(OUTDIR)/hardcopy.o \
 	$(OUTDIR)/hashtab.o \
+	$(OUTDIR)/help.o \
 	$(OUTDIR)/highlight.o \
 	$(OUTDIR)/if_cscope.o \
 	$(OUTDIR)/indent.o \
 	$(OUTDIR)/insexpand.o \
 	$(OUTDIR)/json.o \
 	$(OUTDIR)/list.o \
+	$(OUTDIR)/locale.o \
 	$(OUTDIR)/main.o \
 	$(OUTDIR)/map.o \
 	$(OUTDIR)/mark.o \
@@ -803,6 +815,7 @@ OBJ = \
 	$(OUTDIR)/vim9compile.o \
 	$(OUTDIR)/vim9execute.o \
 	$(OUTDIR)/vim9script.o \
+	$(OUTDIR)/vim9type.o \
 	$(OUTDIR)/viminfo.o \
 	$(OUTDIR)/winclip.o \
 	$(OUTDIR)/window.o
@@ -933,6 +946,9 @@ LFLAGS += -shared
 EXELFLAGS += -municode
  ifneq ($(DEBUG),yes)
 EXELFLAGS += -s
+ endif
+ ifeq ($(COVERAGE),yes)
+EXELFLAGS += --coverage
  endif
 DEFINES += $(DEF_GUI) -DVIMDLL
 OBJ += $(GUIOBJ) $(CUIOBJ)
@@ -1103,7 +1119,7 @@ cmdidxs: ex_cmds.h
 	vim --clean -X --not-a-term -u create_cmdidxs.vim
 
 ###########################################################################
-INCL =	vim.h alloc.h ascii.h ex_cmds.h feature.h globals.h \
+INCL =	vim.h alloc.h ascii.h ex_cmds.h feature.h errors.h globals.h \
 	keymap.h macros.h option.h os_dos.h os_win32.h proto.h regexp.h \
 	spell.h structs.h term.h beval.h $(NBDEBUG_INCL)
 GUI_INCL = gui.h
@@ -1173,6 +1189,8 @@ $(OUTDIR)/vim9compile.o: vim9compile.c $(INCL) version.h
 $(OUTDIR)/vim9execute.o: vim9execute.c $(INCL) version.h
 
 $(OUTDIR)/vim9script.o: vim9script.c $(INCL) version.h
+
+$(OUTDIR)/vim9type.o: vim9type.c $(INCL) version.h
 
 $(OUTDIR)/viminfo.o: viminfo.c $(INCL) version.h
 

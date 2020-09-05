@@ -266,7 +266,7 @@ func Test_search_cmdline2()
   " In that case Vim should return "E35 no previous regular expression",
   " but it looks like Vim still sees /foo and therefore the test fails.
   " Therefore, disabling this test
-  "call assert_fails(feedkeys("/foo\<c-w>\<cr>", 'tx'), 'E35')
+  "call assert_fails(feedkeys("/foo\<c-w>\<cr>", 'tx'), 'E35:')
   "call assert_equal({'lnum': 1, 'leftcol': 0, 'col': 0, 'topfill': 0, 'topline': 1, 'coladd': 0, 'skipcol': 0, 'curswant': 0}, winsaveview())
 
   " clean up
@@ -470,7 +470,7 @@ func Test_search_cmdline3s()
   call feedkeys(":%smagic/the.e/xxx\<cr>", 'tx')
   call assert_equal('  2 xxx', getline('.'))
   undo
-  call assert_fails(":%snomagic/the.e/xxx\<cr>", 'E486')
+  call assert_fails(":%snomagic/the.e/xxx\<cr>", 'E486:')
   "
   call feedkeys(":%snomagic/the\\.e/xxx\<cr>", 'tx')
   call assert_equal('  2 xxx', getline('.'))
@@ -608,7 +608,7 @@ func Test_search_cmdline6()
 endfunc
 
 func Test_search_cmdline7()
-  " Test that an pressing <c-g> in an empty command line
+  " Test that pressing <c-g> in an empty command line
   " does not move the cursor
   CheckOption incsearch
 
@@ -1278,8 +1278,8 @@ endfunc
 func Test_search_sentence()
   new
   " this used to cause a crash
-  call assert_fails("/\\%')", 'E486')
-  call assert_fails("/", 'E486')
+  call assert_fails("/\\%')", 'E486:')
+  call assert_fails("/", 'E486:')
   /\%'(
   /
 endfunc
@@ -1494,8 +1494,8 @@ func Test_search_with_no_last_pat()
     call assert_fails(";//p", 'E35:')
     call assert_fails("??p", 'E35:')
     call assert_fails(";??p", 'E35:')
-    call assert_fails('g//p', 'E476:')
-    call assert_fails('v//p', 'E476:')
+    call assert_fails('g//p', ['E35:', 'E476:'])
+    call assert_fails('v//p', ['E35:', 'E476:'])
     call writefile(v:errors, 'Xresult')
     qall!
   [SCRIPT]
@@ -1516,8 +1516,8 @@ func Test_search_tilde_pat()
     call assert_fails('exe "normal /~\<CR>"', 'E33:')
     call assert_fails('exe "normal ?~\<CR>"', 'E33:')
     set regexpengine=2
-    call assert_fails('exe "normal /~\<CR>"', 'E383:')
-    call assert_fails('exe "normal ?~\<CR>"', 'E383:')
+    call assert_fails('exe "normal /~\<CR>"', ['E33:', 'E383:'])
+    call assert_fails('exe "normal ?~\<CR>"', ['E33:', 'E383:'])
     set regexpengine&
     call writefile(v:errors, 'Xresult')
     qall!
@@ -1641,6 +1641,25 @@ func Test_search_smartcase()
   call assert_equal([2, 4], [line('.'), col('.')])
 
   set ignorecase& smartcase&
+  close!
+endfun
+
+" Test 'smartcase' with utf-8.
+func Test_search_smartcase_utf8()
+  new
+  let save_enc = &encoding
+  set encoding=utf8 ignorecase smartcase
+
+  call setline(1, 'Café cafÉ')
+  1s/café/x/g
+  call assert_equal('x x', getline(1))
+
+  call setline(1, 'Café cafÉ')
+  1s/cafÉ/x/g
+  call assert_equal('Café x', getline(1))
+
+  set ignorecase& smartcase&
+  let &encoding = save_enc
   close!
 endfunc
 

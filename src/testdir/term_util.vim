@@ -73,7 +73,8 @@ func RunVimInTerminal(arguments, options)
   set t_Co=256 background=light
   hi Normal ctermfg=NONE ctermbg=NONE
 
-  " Make the window 20 lines high and 75 columns, unless told otherwise.
+  " Make the window 20 lines high and 75 columns, unless told otherwise or
+  " 'termwinsize' is set.
   let rows = get(a:options, 'rows', 20)
   let cols = get(a:options, 'cols', 75)
   let statusoff = get(a:options, 'statusoff', 1)
@@ -86,11 +87,12 @@ func RunVimInTerminal(arguments, options)
 
   let cmd = GetVimCommandCleanTerm() .. reset_u7 .. a:arguments
 
-  let options = {
-	\ 'curwin': 1,
-	\ 'term_rows': rows,
-	\ 'term_cols': cols,
-	\ }
+  let options = #{curwin: 1}
+  if &termwinsize == ''
+    let options.term_rows = rows
+    let options.term_cols = cols
+  endif
+
   " Accept other options whose name starts with 'term_'.
   call extend(options, filter(copy(a:options), 'v:key =~# "^term_"'))
 
@@ -145,5 +147,29 @@ func StopVimInTerminal(buf)
   call WaitForAssert({-> assert_equal("finished", term_getstatus(a:buf))})
   only!
 endfunc
+
+" Open a terminal with a shell, assign the job to g:job and return the buffer
+" number.
+func Run_shell_in_terminal(options)
+  if has('win32')
+    let buf = term_start([&shell,'/k'], a:options)
+  else
+    let buf = term_start(&shell, a:options)
+  endif
+  let g:test_is_flaky = 1
+
+  let termlist = term_list()
+  call assert_equal(1, len(termlist))
+  call assert_equal(buf, termlist[0])
+
+  let g:job = term_getjob(buf)
+  call assert_equal(v:t_job, type(g:job))
+
+  let string = string({'job': buf->term_getjob()})
+  call assert_match("{'job': 'process \\d\\+ run'}", string)
+
+  return buf
+endfunc
+
 
 " vim: shiftwidth=2 sts=2 expandtab

@@ -97,6 +97,7 @@ static void f_getreg(typval_T *argvars, typval_T *rettv);
 static void f_getreginfo(typval_T *argvars, typval_T *rettv);
 static void f_getregtype(typval_T *argvars, typval_T *rettv);
 static void f_gettagstack(typval_T *argvars, typval_T *rettv);
+static void f_gettext(typval_T *argvars, typval_T *rettv);
 static void f_haslocaldir(typval_T *argvars, typval_T *rettv);
 static void f_hasmapto(typval_T *argvars, typval_T *rettv);
 static void f_hlID(typval_T *argvars, typval_T *rettv);
@@ -347,6 +348,70 @@ ret_first_arg(int argcount, type_T **argtypes)
     return &t_void;
 }
 
+/*
+ * Used for getqflist(): returns list if there is no argument, dict if there is
+ * one.
+ */
+    static type_T *
+ret_list_or_dict_0(int argcount, type_T **argtypes UNUSED)
+{
+    if (argcount > 0)
+	return &t_dict_any;
+    return &t_list_dict_any;
+}
+
+/*
+ * Used for getloclist(): returns list if there is one argument, dict if there
+ * are two.
+ */
+    static type_T *
+ret_list_or_dict_1(int argcount, type_T **argtypes UNUSED)
+{
+    if (argcount > 1)
+	return &t_dict_any;
+    return &t_list_dict_any;
+}
+
+    static type_T *
+ret_argv(int argcount, type_T **argtypes UNUSED)
+{
+    // argv() returns list of strings
+    if (argcount == 0)
+	return &t_list_string;
+
+    // argv(0) returns a string, but argv(-1] returns a list
+    return &t_any;
+}
+
+    static type_T *
+ret_remove(int argcount UNUSED, type_T **argtypes)
+{
+    if (argtypes[0]->tt_type == VAR_LIST
+	    || argtypes[0]->tt_type == VAR_DICT)
+	return argtypes[0]->tt_member;
+    if (argtypes[0]->tt_type == VAR_BLOB)
+	return &t_number;
+    return &t_any;
+}
+
+    static type_T *
+ret_getreg(int argcount, type_T **argtypes UNUSED)
+{
+    // Assume that if the third argument is passed it's non-zero
+    if (argcount == 3)
+	return &t_list_string;
+    return &t_string;
+}
+
+    static type_T *
+ret_maparg(int argcount, type_T **argtypes UNUSED)
+{
+    // Assume that if the fourth argument is passed it's non-zero
+    if (argcount == 4)
+	return &t_dict_any;
+    return &t_string;
+}
+
 static type_T *ret_f_function(int argcount, type_T **argtypes);
 
 /*
@@ -417,20 +482,20 @@ static funcentry_T global_functions[] =
 {
     {"abs",		1, 1, FEARG_1,	  ret_any,	FLOAT_FUNC(f_abs)},
     {"acos",		1, 1, FEARG_1,	  ret_float,	FLOAT_FUNC(f_acos)},
-    {"add",		2, 2, FEARG_1,	  ret_any,	f_add},
+    {"add",		2, 2, FEARG_1,	  ret_first_arg, f_add},
     {"and",		2, 2, FEARG_1,	  ret_number,	f_and},
-    {"append",		2, 2, FEARG_LAST, ret_number,	f_append},
-    {"appendbufline",	3, 3, FEARG_LAST, ret_number,	f_appendbufline},
+    {"append",		2, 2, FEARG_2,	  ret_number,	f_append},
+    {"appendbufline",	3, 3, FEARG_3,	  ret_number,	f_appendbufline},
     {"argc",		0, 1, 0,	  ret_number,	f_argc},
     {"argidx",		0, 0, 0,	  ret_number,	f_argidx},
     {"arglistid",	0, 2, 0,	  ret_number,	f_arglistid},
-    {"argv",		0, 2, 0,	  ret_any,	f_argv},
+    {"argv",		0, 2, 0,	  ret_argv,	f_argv},
     {"asin",		1, 1, FEARG_1,	  ret_float,	FLOAT_FUNC(f_asin)},
     {"assert_beeps",	1, 2, FEARG_1,	  ret_number,	f_assert_beeps},
     {"assert_equal",	2, 3, FEARG_2,	  ret_number,	f_assert_equal},
     {"assert_equalfile", 2, 3, FEARG_1,	  ret_number,	f_assert_equalfile},
     {"assert_exception", 1, 2, 0,	  ret_number,	f_assert_exception},
-    {"assert_fails",	1, 3, FEARG_1,	  ret_number,	f_assert_fails},
+    {"assert_fails",	1, 4, FEARG_1,	  ret_number,	f_assert_fails},
     {"assert_false",	1, 2, FEARG_1,	  ret_number,	f_assert_false},
     {"assert_inrange",	3, 4, FEARG_3,	  ret_number,	f_assert_inrange},
     {"assert_match",	2, 3, FEARG_2,	  ret_number,	f_assert_match},
@@ -500,6 +565,7 @@ static funcentry_T global_functions[] =
     {"ch_status",	1, 2, FEARG_1,	  ret_string,	JOB_FUNC(f_ch_status)},
     {"changenr",	0, 0, 0,	  ret_number,	f_changenr},
     {"char2nr",		1, 2, FEARG_1,	  ret_number,	f_char2nr},
+    {"charclass",	1, 1, FEARG_1,	  ret_number,	f_charclass},
     {"chdir",		1, 1, FEARG_1,	  ret_string,	f_chdir},
     {"cindent",		1, 1, FEARG_1,	  ret_number,	f_cindent},
     {"clearmatches",	0, 1, FEARG_1,	  ret_void,	f_clearmatches},
@@ -509,7 +575,7 @@ static funcentry_T global_functions[] =
     {"complete_check",	0, 0, 0,	  ret_number,	f_complete_check},
     {"complete_info",	0, 1, FEARG_1,	  ret_dict_any,	f_complete_info},
     {"confirm",		1, 4, FEARG_1,	  ret_number,	f_confirm},
-    {"copy",		1, 1, FEARG_1,	  ret_any,	f_copy},
+    {"copy",		1, 1, FEARG_1,	  ret_first_arg, f_copy},
     {"cos",		1, 1, FEARG_1,	  ret_float,	FLOAT_FUNC(f_cos)},
     {"cosh",		1, 1, FEARG_1,	  ret_float,	FLOAT_FUNC(f_cosh)},
     {"count",		2, 4, FEARG_1,	  ret_number,	f_count},
@@ -522,7 +588,7 @@ static funcentry_T global_functions[] =
 	    NULL
 #endif
 			},
-    {"deepcopy",	1, 2, FEARG_1,	  ret_any,	f_deepcopy},
+    {"deepcopy",	1, 2, FEARG_1,	  ret_first_arg, f_deepcopy},
     {"delete",		1, 2, FEARG_1,	  ret_number,	f_delete},
     {"deletebufline",	2, 3, FEARG_1,	  ret_number,	f_deletebufline},
     {"did_filetype",	0, 0, 0,	  ret_number,	f_did_filetype},
@@ -541,12 +607,12 @@ static funcentry_T global_functions[] =
     {"exp",		1, 1, FEARG_1,	  ret_float,	FLOAT_FUNC(f_exp)},
     {"expand",		1, 3, FEARG_1,	  ret_any,	f_expand},
     {"expandcmd",	1, 1, FEARG_1,	  ret_string,	f_expandcmd},
-    {"extend",		2, 3, FEARG_1,	  ret_any,	f_extend},
+    {"extend",		2, 3, FEARG_1,	  ret_first_arg, f_extend},
     {"feedkeys",	1, 2, FEARG_1,	  ret_void,	f_feedkeys},
     {"file_readable",	1, 1, FEARG_1,	  ret_number,	f_filereadable}, // obsolete
     {"filereadable",	1, 1, FEARG_1,	  ret_number,	f_filereadable},
     {"filewritable",	1, 1, FEARG_1,	  ret_number,	f_filewritable},
-    {"filter",		2, 2, FEARG_1,	  ret_any,	f_filter},
+    {"filter",		2, 2, FEARG_1,	  ret_first_arg, f_filter},
     {"finddir",		1, 3, FEARG_1,	  ret_string,	f_finddir},
     {"findfile",	1, 3, FEARG_1,	  ret_string,	f_findfile},
     {"flatten",		1, 2, FEARG_1,	  ret_list_any,	f_flatten},
@@ -565,7 +631,7 @@ static funcentry_T global_functions[] =
     {"function",	1, 3, FEARG_1,	  ret_f_function, f_function},
     {"garbagecollect",	0, 1, 0,	  ret_void,	f_garbagecollect},
     {"get",		2, 3, FEARG_1,	  ret_any,	f_get},
-    {"getbufinfo",	0, 1, 0,	  ret_list_dict_any, f_getbufinfo},
+    {"getbufinfo",	0, 1, FEARG_1,	  ret_list_dict_any, f_getbufinfo},
     {"getbufline",	2, 3, FEARG_1,	  ret_list_string, f_getbufline},
     {"getbufvar",	2, 3, FEARG_1,	  ret_any,	f_getbufvar},
     {"getchangelist",	0, 1, FEARG_1,	  ret_list_any,	f_getchangelist},
@@ -588,20 +654,21 @@ static funcentry_T global_functions[] =
     {"getimstatus",	0, 0, 0,	  ret_number,	f_getimstatus},
     {"getjumplist",	0, 2, FEARG_1,	  ret_list_any,	f_getjumplist},
     {"getline",		1, 2, FEARG_1,	  ret_f_getline, f_getline},
-    {"getloclist",	1, 2, 0,	  ret_list_dict_any, f_getloclist},
+    {"getloclist",	1, 2, 0,	  ret_list_or_dict_1, f_getloclist},
     {"getmarklist",	0, 1, FEARG_1,	  ret_list_dict_any,  f_getmarklist},
     {"getmatches",	0, 1, 0,	  ret_list_dict_any, f_getmatches},
     {"getmousepos",	0, 0, 0,	  ret_dict_number, f_getmousepos},
     {"getpid",		0, 0, 0,	  ret_number,	f_getpid},
     {"getpos",		1, 1, FEARG_1,	  ret_list_number,	f_getpos},
-    {"getqflist",	0, 1, 0,	  ret_list_dict_any,	f_getqflist},
-    {"getreg",		0, 3, FEARG_1,	  ret_string,	f_getreg},
+    {"getqflist",	0, 1, 0,	  ret_list_or_dict_0,	f_getqflist},
+    {"getreg",		0, 3, FEARG_1,	  ret_getreg,	f_getreg},
     {"getreginfo",	0, 1, FEARG_1,	  ret_dict_any,	f_getreginfo},
     {"getregtype",	0, 1, FEARG_1,	  ret_string,	f_getregtype},
     {"gettabinfo",	0, 1, FEARG_1,	  ret_list_dict_any,	f_gettabinfo},
     {"gettabvar",	2, 3, FEARG_1,	  ret_any,	f_gettabvar},
     {"gettabwinvar",	3, 4, FEARG_1,	  ret_any,	f_gettabwinvar},
     {"gettagstack",	0, 1, FEARG_1,	  ret_dict_any,	f_gettagstack},
+    {"gettext",		1, 1, FEARG_1,	  ret_string,	f_gettext},
     {"getwininfo",	0, 1, FEARG_1,	  ret_list_dict_any,	f_getwininfo},
     {"getwinpos",	0, 1, FEARG_1,	  ret_list_number,	f_getwinpos},
     {"getwinposx",	0, 0, 0,	  ret_number,	f_getwinposx},
@@ -632,7 +699,7 @@ static funcentry_T global_functions[] =
     {"inputrestore",	0, 0, 0,	  ret_number,	f_inputrestore},
     {"inputsave",	0, 0, 0,	  ret_number,	f_inputsave},
     {"inputsecret",	1, 2, FEARG_1,	  ret_string,	f_inputsecret},
-    {"insert",		2, 3, FEARG_1,	  ret_any,	f_insert},
+    {"insert",		2, 3, FEARG_1,	  ret_first_arg, f_insert},
     {"interrupt",	0, 0, 0,	  ret_void,	f_interrupt},
     {"invert",		1, 1, FEARG_1,	  ret_number,	f_invert},
     {"isdirectory",	1, 1, FEARG_1,	  ret_number,	f_isdirectory},
@@ -651,7 +718,7 @@ static funcentry_T global_functions[] =
     {"js_encode",	1, 1, FEARG_1,	  ret_string,	f_js_encode},
     {"json_decode",	1, 1, FEARG_1,	  ret_any,	f_json_decode},
     {"json_encode",	1, 1, FEARG_1,	  ret_string,	f_json_encode},
-    {"keys",		1, 1, FEARG_1,	  ret_list_any,	f_keys},
+    {"keys",		1, 1, FEARG_1,	  ret_list_string, f_keys},
     {"last_buffer_nr",	0, 0, 0,	  ret_number,	f_last_buffer_nr}, // obsolete
     {"len",		1, 1, FEARG_1,	  ret_number,	f_len},
     {"libcall",		3, 3, FEARG_3,	  ret_string,	f_libcall},
@@ -674,7 +741,7 @@ static funcentry_T global_functions[] =
 #endif
 			},
     {"map",		2, 2, FEARG_1,	  ret_any,	f_map},
-    {"maparg",		1, 4, FEARG_1,	  ret_string,	f_maparg},
+    {"maparg",		1, 4, FEARG_1,	  ret_maparg,	f_maparg},
     {"mapcheck",	1, 3, FEARG_1,	  ret_string,	f_mapcheck},
     {"mapset",		3, 3, FEARG_1,	  ret_void,	f_mapset},
     {"match",		2, 4, FEARG_1,	  ret_any,	f_match},
@@ -739,6 +806,7 @@ static funcentry_T global_functions[] =
     {"pow",		2, 2, FEARG_1,	  ret_float,	FLOAT_FUNC(f_pow)},
     {"prevnonblank",	1, 1, FEARG_1,	  ret_number,	f_prevnonblank},
     {"printf",		1, 19, FEARG_2,	  ret_string,	f_printf},
+    {"prompt_getprompt", 1, 1, FEARG_1,	  ret_string,	JOB_FUNC(f_prompt_getprompt)},
     {"prompt_setcallback", 2, 2, FEARG_1, ret_void,	JOB_FUNC(f_prompt_setcallback)},
     {"prompt_setinterrupt", 2, 2, FEARG_1,ret_void,	JOB_FUNC(f_prompt_setinterrupt)},
     {"prompt_setprompt", 2, 2, FEARG_1,	  ret_void,	JOB_FUNC(f_prompt_setprompt)},
@@ -791,12 +859,12 @@ static funcentry_T global_functions[] =
     {"remote_peek",	1, 2, FEARG_1,	  ret_number,	f_remote_peek},
     {"remote_read",	1, 2, FEARG_1,	  ret_string,	f_remote_read},
     {"remote_send",	2, 3, FEARG_1,	  ret_string,	f_remote_send},
-    {"remote_startserver", 1, 1, FEARG_1, ret_void,	 f_remote_startserver},
-    {"remove",		2, 3, FEARG_1,	  ret_any,	f_remove},
+    {"remote_startserver", 1, 1, FEARG_1, ret_void,	f_remote_startserver},
+    {"remove",		2, 3, FEARG_1,	  ret_remove,	f_remove},
     {"rename",		2, 2, FEARG_1,	  ret_number,	f_rename},
-    {"repeat",		2, 2, FEARG_1,	  ret_any,	f_repeat},
+    {"repeat",		2, 2, FEARG_1,	  ret_first_arg, f_repeat},
     {"resolve",		1, 1, FEARG_1,	  ret_string,	f_resolve},
-    {"reverse",		1, 1, FEARG_1,	  ret_any,	f_reverse},
+    {"reverse",		1, 1, FEARG_1,	  ret_first_arg, f_reverse},
     {"round",		1, 1, FEARG_1,	  ret_float,	FLOAT_FUNC(f_round)},
     {"rubyeval",	1, 1, FEARG_1,	  ret_any,
 #ifdef FEAT_RUBY
@@ -822,6 +890,7 @@ static funcentry_T global_functions[] =
     {"serverlist",	0, 0, 0,	  ret_string,	f_serverlist},
     {"setbufline",	3, 3, FEARG_3,	  ret_number,	f_setbufline},
     {"setbufvar",	3, 3, FEARG_3,	  ret_void,	f_setbufvar},
+    {"setcellwidths",	1, 1, FEARG_1,	  ret_void,	f_setcellwidths},
     {"setcharsearch",	1, 1, FEARG_1,	  ret_void,	f_setcharsearch},
     {"setcmdpos",	1, 1, FEARG_1,	  ret_number,	f_setcmdpos},
     {"setenv",		2, 2, FEARG_2,	  ret_void,	f_setenv},
@@ -886,7 +955,7 @@ static funcentry_T global_functions[] =
     {"stridx",		2, 3, FEARG_1,	  ret_number,	f_stridx},
     {"string",		1, 1, FEARG_1,	  ret_string,	f_string},
     {"strlen",		1, 1, FEARG_1,	  ret_number,	f_strlen},
-    {"strpart",		2, 3, FEARG_1,	  ret_string,	f_strpart},
+    {"strpart",		2, 4, FEARG_1,	  ret_string,	f_strpart},
     {"strptime",	2, 2, FEARG_1,	  ret_number,
 #ifdef HAVE_STRPTIME
 	    f_strptime
@@ -982,7 +1051,7 @@ static funcentry_T global_functions[] =
     {"test_settime",	1, 1, FEARG_1,	  ret_void,	f_test_settime},
     {"test_srand_seed",	0, 1, FEARG_1,	  ret_void,	f_test_srand_seed},
     {"test_unknown",	0, 0, 0,	  ret_any,	f_test_unknown},
-    {"test_void",	0, 0, 0,	  ret_any,	f_test_void},
+    {"test_void",	0, 0, 0,	  ret_void,	f_test_void},
     {"timer_info",	0, 1, FEARG_1,	  ret_list_dict_any, TIMER_FUNC(f_timer_info)},
     {"timer_pause",	2, 2, FEARG_1,	  ret_void,	TIMER_FUNC(f_timer_pause)},
     {"timer_start",	2, 3, FEARG_1,	  ret_number,	TIMER_FUNC(f_timer_start)},
@@ -1145,7 +1214,9 @@ internal_func_ret_type(int idx, int argcount, type_T **argtypes)
 
 /*
  * Check the argument count to use for internal function "idx".
- * Returns OK or FAIL;
+ * Returns -1 for failure, 0 if no method base accepted, 1 if method base is
+ * first argument, 2 if method base is second argument, etc.  9 if method base
+ * is last argument.
  */
     int
 check_internal_func(int idx, int argcount)
@@ -1158,14 +1229,14 @@ check_internal_func(int idx, int argcount)
     else if (argcount > global_functions[idx].f_max_argc)
 	res = FCERR_TOOMANY;
     else
-	return OK;
+	return global_functions[idx].f_argtype;
 
     name = internal_func_name(idx);
     if (res == FCERR_TOOMANY)
 	semsg(_(e_toomanyarg), name);
     else
 	semsg(_(e_toofewarg), name);
-    return FAIL;
+    return -1;
 }
 
     int
@@ -1639,7 +1710,7 @@ f_char2nr(typval_T *argvars, typval_T *rettv)
 	int	utf8 = 0;
 
 	if (argvars[1].v_type != VAR_UNKNOWN)
-	    utf8 = (int)tv_get_number_chk(&argvars[1], NULL);
+	    utf8 = (int)tv_get_bool_chk(&argvars[1], NULL);
 
 	if (utf8)
 	    rettv->vval.v_number = utf_ptr2char(tv_get_string(&argvars[0]));
@@ -2093,7 +2164,7 @@ f_eval(typval_T *argvars, typval_T *rettv)
 	rettv->vval.v_number = 0;
     }
     else if (*s != NUL)
-	emsg(_(e_trailing));
+	semsg(_(e_trailing_arg), s);
 }
 
 /*
@@ -2132,13 +2203,12 @@ execute_redir_str(char_u *value, int value_len)
  * Called by do_cmdline() to get the next line.
  * Returns allocated string, or NULL for end of function.
  */
-
     static char_u *
 get_list_line(
     int	    c UNUSED,
     void    *cookie,
     int	    indent UNUSED,
-    int	    do_concat UNUSED)
+    getline_opt_T options UNUSED)
 {
     listitem_T **p = (listitem_T **)cookie;
     listitem_T *item = *p;
@@ -2300,7 +2370,7 @@ f_exists(typval_T *argvars, typval_T *rettv)
     }
     else if (*p == '&' || *p == '+')			// option
     {
-	n = (get_option_tv(&p, NULL, TRUE) == OK);
+	n = (eval_option(&p, NULL, TRUE) == OK);
 	if (*skipwhite(p) != NUL)
 	    n = FALSE;			// trailing garbage
     }
@@ -2365,7 +2435,7 @@ f_expand(typval_T *argvars, typval_T *rettv)
     rettv->v_type = VAR_STRING;
     if (argvars[1].v_type != VAR_UNKNOWN
 	    && argvars[2].v_type != VAR_UNKNOWN
-	    && tv_get_number_chk(&argvars[2], &error)
+	    && tv_get_bool_chk(&argvars[2], &error)
 	    && !error)
 	rettv_list_set(rettv, NULL);
 
@@ -2389,7 +2459,7 @@ f_expand(typval_T *argvars, typval_T *rettv)
 	// When the optional second argument is non-zero, don't remove matches
 	// for 'wildignore' and don't put matches for 'suffixes' at the end.
 	if (argvars[1].v_type != VAR_UNKNOWN
-				    && tv_get_number_chk(&argvars[1], &error))
+				    && tv_get_bool_chk(&argvars[1], &error))
 	    options |= WILD_KEEP_ALL;
 	if (!error)
 	{
@@ -3012,12 +3082,7 @@ f_getchangelist(typval_T *argvars, typval_T *rettv)
     if (argvars[0].v_type == VAR_UNKNOWN)
 	buf = curbuf;
     else
-    {
-	(void)tv_get_number(&argvars[0]);    // issue errmsg if type error
-	++emsg_off;
-	buf = tv_get_buf(&argvars[0], FALSE);
-	--emsg_off;
-    }
+	buf = tv_get_buf_from_arg(&argvars[0]);
     if (buf == NULL)
 	return;
 
@@ -3272,9 +3337,9 @@ f_getreg(typval_T *argvars, typval_T *rettv)
 	error = strregname == NULL;
 	if (argvars[1].v_type != VAR_UNKNOWN)
 	{
-	    arg2 = (int)tv_get_number_chk(&argvars[1], &error);
+	    arg2 = (int)tv_get_bool_chk(&argvars[1], &error);
 	    if (!error && argvars[2].v_type != VAR_UNKNOWN)
-		return_list = (int)tv_get_number_chk(&argvars[2], &error);
+		return_list = (int)tv_get_bool_chk(&argvars[2], &error);
 	}
     }
     else
@@ -3368,6 +3433,26 @@ f_gettagstack(typval_T *argvars, typval_T *rettv)
     }
 
     get_tagstack(wp, rettv->vval.v_dict);
+}
+
+/*
+ * "gettext()" function
+ */
+    static void
+f_gettext(typval_T *argvars, typval_T *rettv)
+{
+    if (argvars[0].v_type != VAR_STRING
+	    || argvars[0].vval.v_string == NULL
+	    || *argvars[0].vval.v_string == NUL)
+    {
+	semsg(_(e_invarg2), tv_get_string(&argvars[0]));
+    }
+    else
+    {
+	rettv->v_type = VAR_STRING;
+	rettv->vval.v_string = vim_strsave(
+					(char_u *)_(argvars[0].vval.v_string));
+    }
 }
 
 // for VIM_VERSION_ defines
@@ -3854,13 +3939,7 @@ f_has(typval_T *argvars, typval_T *rettv)
 		0
 #endif
 		},
-	{"gui_mac",
-#ifdef FEAT_GUI_MAC
-		1
-#else
-		0
-#endif
-		},
+	{"gui_mac", 0},
 	{"gui_motif",
 #ifdef FEAT_GUI_MOTIF
 		1
@@ -4730,7 +4809,7 @@ f_hasmapto(typval_T *argvars, typval_T *rettv)
     {
 	mode = tv_get_string_buf(&argvars[1], buf);
 	if (argvars[2].v_type != VAR_UNKNOWN)
-	    abbr = (int)tv_get_number(&argvars[2]);
+	    abbr = (int)tv_get_bool(&argvars[2]);
     }
 
     if (map_to_exists(name, mode, abbr))
@@ -4866,7 +4945,7 @@ f_index(typval_T *argvars, typval_T *rettv)
 	    item = list_find(l, (long)tv_get_number_chk(&argvars[2], &error));
 	    idx = l->lv_u.mat.lv_idx;
 	    if (argvars[3].v_type != VAR_UNKNOWN)
-		ic = (int)tv_get_number_chk(&argvars[3], &error);
+		ic = (int)tv_get_bool_chk(&argvars[3], &error);
 	    if (error)
 		item = NULL;
 	}
@@ -5065,7 +5144,7 @@ f_islocked(typval_T *argvars, typval_T *rettv)
     if (end != NULL && lv.ll_name != NULL)
     {
 	if (*end != NUL)
-	    emsg(_(e_trailing));
+	    semsg(_(e_trailing_arg), end);
 	else
 	{
 	    if (lv.ll_tv == NULL)
@@ -6272,7 +6351,7 @@ f_getreginfo(typval_T *argvars, typval_T *rettv)
     list = (list_T *)get_reg_contents(regname, GREG_EXPR_SRC | GREG_LIST);
     if (list == NULL)
 	return;
-    dict_add_list(dict, "regcontents", list);
+    (void)dict_add_list(dict, "regcontents", list);
 
     buf[0] = NUL;
     buf[1] = NUL;
@@ -6285,12 +6364,12 @@ f_getreginfo(typval_T *argvars, typval_T *rettv)
 			    reglen + 1);
 		    break;
     }
-    dict_add_string(dict, (char *)"regtype", buf);
+    (void)dict_add_string(dict, (char *)"regtype", buf);
 
     buf[0] = get_register_name(get_unname_register());
     buf[1] = NUL;
     if (regname == '"')
-	dict_add_string(dict, (char *)"points_to", buf);
+	(void)dict_add_string(dict, (char *)"points_to", buf);
     else
     {
 	dictitem_T	*item = dictitem_alloc((char_u *)"isunnamed");
@@ -6300,7 +6379,7 @@ f_getreginfo(typval_T *argvars, typval_T *rettv)
 	    item->di_tv.v_type = VAR_SPECIAL;
 	    item->di_tv.vval.v_number = regname == buf[0]
 		? VVAL_TRUE : VVAL_FALSE;
-	    dict_add(dict, item);
+	    (void)dict_add(dict, item);
 	}
     }
 }
@@ -7368,7 +7447,7 @@ f_setreg(typval_T *argvars, typval_T *rettv)
 		regname = pointreg;
 	    }
 	}
-	else if (dict_get_number(d, (char_u *)"isunnamed"))
+	else if (dict_get_bool(d, (char_u *)"isunnamed", -1) > 0)
 	    pointreg = regname;
     }
     else
@@ -7811,9 +7890,9 @@ f_split(typval_T *argvars, typval_T *rettv)
 	pat = (char_u *)"[\\x01- ]\\+";
 
     if (rettv_list_alloc(rettv) == FAIL)
-	return;
+	goto theend;
     if (typeerr)
-	return;
+	goto theend;
 
     regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
     if (regmatch.regprog != NULL)
@@ -7850,6 +7929,7 @@ f_split(typval_T *argvars, typval_T *rettv)
 	vim_regfree(regmatch.regprog);
     }
 
+theend:
     p_cpo = save_cpo;
 }
 
@@ -8210,10 +8290,8 @@ f_strpart(typval_T *argvars, typval_T *rettv)
     else
 	len = slen - n;	    // default len: all bytes that are available.
 
-    /*
-     * Only return the overlap between the specified part and the actual
-     * string.
-     */
+    // Only return the overlap between the specified part and the actual
+    // string.
     if (n < 0)
     {
 	len += n;
@@ -8225,6 +8303,16 @@ f_strpart(typval_T *argvars, typval_T *rettv)
 	len = 0;
     else if (n + len > slen)
 	len = slen - n;
+
+    if (argvars[2].v_type != VAR_UNKNOWN && argvars[3].v_type != VAR_UNKNOWN)
+    {
+	int off;
+
+	// length in characters
+	for (off = n; off < slen && len > 0; --len)
+	    off += mb_ptr2len(p + off);
+	len = off - n;
+    }
 
     rettv->v_type = VAR_STRING;
     rettv->vval.v_string = vim_strnsave(p + n, len);
