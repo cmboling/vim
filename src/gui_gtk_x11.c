@@ -1236,11 +1236,10 @@ key_press_event(GtkWidget *widget UNUSED,
     }
     else
     {
-	// <C-H> and <C-h> mean the same thing, always use "H"
-	if ((modifiers & MOD_MASK_CTRL) && ASCII_ISALPHA(key))
-	    key = TOUPPER_ASC(key);
+	// Some keys need adjustment when the Ctrl modifier is used.
+	key = may_adjust_key_for_ctrl(modifiers, key);
 
-	// May remove the shift modifier if it's included in the key.
+	// May remove the Shift modifier if it's included in the key.
 	modifiers = may_remove_shift_modifier(modifiers, key);
 
 	len = mb_char2bytes(key, string);
@@ -2555,7 +2554,8 @@ mainwin_realize(GtkWidget *widget UNUSED, gpointer data UNUSED)
 
 	gtk_window_set_icon_list(GTK_WINDOW(gui.mainwin), icons);
 
-	g_list_foreach(icons, (GFunc)&g_object_unref, NULL);
+	// TODO: is this type cast OK?
+	g_list_foreach(icons, (GFunc)(void *)&g_object_unref, NULL);
 	g_list_free(icons);
     }
 
@@ -3092,8 +3092,8 @@ icon_size_changed_foreach(GtkWidget *widget, gpointer user_data)
 	    const gchar *icon_name;
 
 	    gtk_image_get_icon_name(image, &icon_name, NULL);
-
-	    gtk_image_set_from_icon_name(image, icon_name, icon_size);
+	    image = (GtkImage *)gtk_image_new_from_icon_name(
+							 icon_name, icon_size);
 	}
 # else
 	// User-defined icons are stored in a GtkIconSet
@@ -4380,11 +4380,14 @@ gui_mch_open(void)
     return OK;
 }
 
-
+/*
+ * Clean up for when exiting Vim.
+ */
     void
 gui_mch_exit(int rc UNUSED)
 {
-    if (gui.mainwin != NULL)
+    // Clean up, unless we don't want to invoke free().
+    if (gui.mainwin != NULL && !really_exiting)
 	gtk_widget_destroy(gui.mainwin);
 }
 
@@ -4967,7 +4970,8 @@ ascii_glyph_table_init(void)
 	}
     }
 
-    g_list_foreach(item_list, (GFunc)&pango_item_free, NULL);
+    // TODO: is this type cast OK?
+    g_list_foreach(item_list, (GFunc)(void *)&pango_item_free, NULL);
     g_list_free(item_list);
     pango_attr_list_unref(attr_list);
 }

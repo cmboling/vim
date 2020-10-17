@@ -263,6 +263,7 @@ static void	ex_psearch(exarg_T *eap);
 static void	ex_tag(exarg_T *eap);
 static void	ex_tag_cmd(exarg_T *eap, char_u *name);
 #ifndef FEAT_EVAL
+# define ex_block		ex_ni
 # define ex_break		ex_ni
 # define ex_breakadd		ex_ni
 # define ex_breakdel		ex_ni
@@ -280,6 +281,7 @@ static void	ex_tag_cmd(exarg_T *eap, char_u *name);
 # define ex_echo		ex_ni
 # define ex_echohl		ex_ni
 # define ex_else		ex_ni
+# define ex_endblock		ex_ni
 # define ex_endfunction		ex_ni
 # define ex_endif		ex_ni
 # define ex_endtry		ex_ni
@@ -291,6 +293,7 @@ static void	ex_tag_cmd(exarg_T *eap, char_u *name);
 # define ex_function		ex_ni
 # define ex_if			ex_ni
 # define ex_let			ex_ni
+# define ex_var			ex_ni
 # define ex_lockvar		ex_ni
 # define ex_oldfiles		ex_ni
 # define ex_options		ex_ni
@@ -1233,6 +1236,10 @@ do_cmdline(
 
     if (trylevel == 0)
     {
+	// Just in case did_throw got set but current_exception wasn't.
+	if (current_exception == NULL)
+	    did_throw = FALSE;
+
 	/*
 	 * When an exception is being thrown out of the outermost try
 	 * conditional, discard the uncaught exception, disable the conversion
@@ -1779,9 +1786,7 @@ do_one_cmd(
     may_have_range = !vim9script || starts_with_colon;
     if (may_have_range)
 #endif
-	ea.cmd = skip_range(ea.cmd, NULL);
-    if (*ea.cmd == '*' && vim_strchr(p_cpo, CPO_STAR) == NULL)
-	ea.cmd = skipwhite(ea.cmd + 1);
+	ea.cmd = skip_range(ea.cmd, TRUE, NULL);
 
 #ifdef FEAT_EVAL
     if (vim9script && !starts_with_colon)
@@ -2423,6 +2428,7 @@ do_one_cmd(
 	    case CMD_eval:
 	    case CMD_execute:
 	    case CMD_filter:
+	    case CMD_final:
 	    case CMD_help:
 	    case CMD_hide:
 	    case CMD_ijump:
@@ -2444,9 +2450,9 @@ do_one_cmd(
 	    case CMD_noswapfile:
 	    case CMD_perl:
 	    case CMD_psearch:
-	    case CMD_python:
 	    case CMD_py3:
 	    case CMD_python3:
+	    case CMD_python:
 	    case CMD_return:
 	    case CMD_rightbelow:
 	    case CMD_ruby:
@@ -2462,6 +2468,7 @@ do_one_cmd(
 	    case CMD_topleft:
 	    case CMD_unlet:
 	    case CMD_unlockvar:
+	    case CMD_var:
 	    case CMD_verbose:
 	    case CMD_vertical:
 	    case CMD_wincmd:
@@ -2683,7 +2690,7 @@ parse_command_modifiers(exarg_T *eap, char **errormsg, int skip_only)
 	    return FAIL;
 	}
 
-	p = skip_range(eap->cmd, NULL);
+	p = skip_range(eap->cmd, TRUE, NULL);
 	switch (*p)
 	{
 	    // When adding an entry, also modify cmd_exists().
@@ -3116,7 +3123,7 @@ checkforcmd(
     for (i = 0; cmd[i] != NUL; ++i)
 	if (((char_u *)cmd)[i] != (*pp)[i])
 	    break;
-    if (i >= len && !isalpha((*pp)[i]))
+    if (i >= len && !isalpha((*pp)[i]) && (*pp)[i] != '_')
     {
 	*pp = skipwhite(*pp + i);
 	return TRUE;
@@ -3217,7 +3224,7 @@ find_ex_command(
 		*p == '('
 		    || (p == eap->cmd
 			? (
-			    // "{..." is an dict expression.
+			    // "{..." is a dict expression or block start.
 			    *eap->cmd == '{'
 			    // "'string'->func()" is an expression.
 			 || *eap->cmd == '\''
@@ -3226,16 +3233,36 @@ find_ex_command(
 			    // "g:varname" is an expression.
 			 || eap->cmd[1] == ':'
 			    )
-			: (
+			    // "varname->func()" is an expression.
+			: (*p == '-' && p[1] == '>')))
+	    {
+		if (*eap->cmd == '{' && ends_excmd(*skipwhite(eap->cmd + 1)))
+		{
+		    // "{" by itself is the start of a block.
+		    eap->cmdidx = CMD_block;
+		    return eap->cmd + 1;
+		}
+		eap->cmdidx = CMD_eval;
+		return eap->cmd;
+	    }
+
+	    if (p != eap->cmd && (
 			    // "varname[]" is an expression.
 			    *p == '['
-			    // "varname->func()" is an expression.
-			 || (*p == '-' && p[1] == '>')
-			    // "varname.expr" is an expression.
-			 || (*p == '.' && ASCII_ISALPHA(p[1]))
-			 )))
+			    // "varname.key" is an expression.
+			 || (*p == '.' && ASCII_ISALPHA(p[1]))))
 	    {
-		eap->cmdidx = CMD_eval;
+		char_u	*after = p;
+
+		// When followed by "=" or "+=" then it is an assignment.
+		++emsg_silent;
+		if (skip_expr(&after) == OK
+				  && (*after == '='
+				      || (*after != NUL && after[1] == '=')))
+		    eap->cmdidx = CMD_var;
+		else
+		    eap->cmdidx = CMD_eval;
+		--emsg_silent;
 		return eap->cmd;
 	    }
 
@@ -3256,7 +3283,7 @@ find_ex_command(
 		}
 		if (p > eap->cmd && *skipwhite(p) == '=')
 		{
-		    eap->cmdidx = CMD_let;
+		    eap->cmdidx = CMD_var;
 		    return eap->cmd;
 		}
 	    }
@@ -3275,7 +3302,7 @@ find_ex_command(
 			|| *eap->cmd == '@'
 			|| lookup(eap->cmd, p - eap->cmd, cctx) != NULL)
 		{
-		    eap->cmdidx = CMD_let;
+		    eap->cmdidx = CMD_var;
 		    return eap->cmd;
 		}
 	    }
@@ -3336,7 +3363,7 @@ find_ex_command(
 	}
 
 	// check for non-alpha command
-	if (p == eap->cmd && vim_strchr((char_u *)"@*!=><&~#", *p) != NULL)
+	if (p == eap->cmd && vim_strchr((char_u *)"@*!=><&~#}", *p) != NULL)
 	    ++p;
 	len = (int)(p - eap->cmd);
 	if (*eap->cmd == 'd' && (p[-1] == 'l' || p[-1] == 'p'))
@@ -3404,6 +3431,10 @@ find_ex_command(
 	if (p == eap->cmd)
 	    eap->cmdidx = CMD_SIZE;
     }
+
+    // ":fina" means ":finally" for backwards compatibility.
+    if (eap->cmdidx == CMD_final && p - eap->cmd == 4)
+	eap->cmdidx = CMD_finally;
 
     return p;
 }
@@ -3534,7 +3565,8 @@ excmd_get_argt(cmdidx_T idx)
     char_u *
 skip_range(
     char_u	*cmd,
-    int		*ctx)	// pointer to xp_context or NULL
+    int		skip_star,	// skip "*" used for Visual range
+    int		*ctx)		// pointer to xp_context or NULL
 {
     unsigned	delim;
 
@@ -3567,6 +3599,10 @@ skip_range(
 
     // Skip ":" and white space.
     while (*cmd == ':')
+	cmd = skipwhite(cmd + 1);
+
+    // Skip "*" used for Visual range.
+    if (skip_star && *cmd == '*' && vim_strchr(p_cpo, CPO_STAR) == NULL)
 	cmd = skipwhite(cmd + 1);
 
     return cmd;
@@ -6048,6 +6084,7 @@ ex_splitview(exarg_T *eap)
     char_u	*fname = NULL;
 #endif
 #ifdef FEAT_BROWSE
+    char_u	dot_path[] = ".";
     int		browse_flag = cmdmod.browse;
 #endif
     int		use_tab = eap->cmdidx == CMD_tabedit
@@ -6100,7 +6137,7 @@ ex_splitview(exarg_T *eap)
 	    // No browsing supported but we do have the file explorer:
 	    // Edit the directory.
 	    if (*eap->arg == NUL || !mch_isdir(eap->arg))
-		eap->arg = (char_u *)".";
+		eap->arg = dot_path;
 	}
 	else
 	{
@@ -7321,7 +7358,7 @@ ex_put(exarg_T *eap)
 	eap->forceit = TRUE;
     }
     curwin->w_cursor.lnum = eap->line2;
-    do_put(eap->regname, eap->forceit ? BACKWARD : FORWARD, 1L,
+    do_put(eap->regname, NULL, eap->forceit ? BACKWARD : FORWARD, 1L,
 						       PUT_LINE|PUT_CURSLINE);
 }
 
@@ -8389,6 +8426,7 @@ find_cmdline_var(char_u *src, int *usedlen)
  *	  '<cexpr>' to C-expression under the cursor
  *	  '<cfile>' to path name under the cursor
  *	  '<sfile>' to sourced file name
+ *	  '<stack>' to call stack
  *	  '<slnum>' to sourced file line number
  *	  '<afile>' to file name for autocommand
  *	  '<abuf>'  to buffer number for autocommand
@@ -8606,7 +8644,8 @@ eval_vars(
 
 	case SPEC_SFILE:	// file name for ":so" command
 	case SPEC_STACK:	// call stack
-		result = estack_sfile(spec_idx == SPEC_SFILE);
+		result = estack_sfile(spec_idx == SPEC_SFILE
+						? ESTACK_SFILE : ESTACK_STACK);
 		if (result == NULL)
 		{
 		    *errormsg = spec_idx == SPEC_SFILE

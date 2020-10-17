@@ -386,11 +386,14 @@ ret_argv(int argcount, type_T **argtypes UNUSED)
     static type_T *
 ret_remove(int argcount UNUSED, type_T **argtypes)
 {
-    if (argtypes[0]->tt_type == VAR_LIST
-	    || argtypes[0]->tt_type == VAR_DICT)
-	return argtypes[0]->tt_member;
-    if (argtypes[0]->tt_type == VAR_BLOB)
-	return &t_number;
+    if (argtypes != NULL)
+    {
+	if (argtypes[0]->tt_type == VAR_LIST
+		|| argtypes[0]->tt_type == VAR_DICT)
+	    return argtypes[0]->tt_member;
+	if (argtypes[0]->tt_type == VAR_BLOB)
+	    return &t_number;
+    }
     return &t_any;
 }
 
@@ -495,7 +498,7 @@ static funcentry_T global_functions[] =
     {"assert_equal",	2, 3, FEARG_2,	  ret_number,	f_assert_equal},
     {"assert_equalfile", 2, 3, FEARG_1,	  ret_number,	f_assert_equalfile},
     {"assert_exception", 1, 2, 0,	  ret_number,	f_assert_exception},
-    {"assert_fails",	1, 4, FEARG_1,	  ret_number,	f_assert_fails},
+    {"assert_fails",	1, 5, FEARG_1,	  ret_number,	f_assert_fails},
     {"assert_false",	1, 2, FEARG_1,	  ret_number,	f_assert_false},
     {"assert_inrange",	3, 4, FEARG_3,	  ret_number,	f_assert_inrange},
     {"assert_match",	2, 3, FEARG_2,	  ret_number,	f_assert_match},
@@ -643,7 +646,7 @@ static funcentry_T global_functions[] =
     {"getcmdtype",	0, 0, 0,	  ret_string,	f_getcmdtype},
     {"getcmdwintype",	0, 0, 0,	  ret_string,	f_getcmdwintype},
     {"getcompletion",	2, 3, FEARG_1,	  ret_list_string, f_getcompletion},
-    {"getcurpos",	0, 0, 0,	  ret_list_number, f_getcurpos},
+    {"getcurpos",	0, 1, FEARG_1,	  ret_list_number, f_getcurpos},
     {"getcwd",		0, 2, FEARG_1,	  ret_string,	f_getcwd},
     {"getenv",		1, 1, FEARG_1,	  ret_string,	f_getenv},
     {"getfontname",	0, 1, 0,	  ret_string,	f_getfontname},
@@ -750,6 +753,8 @@ static funcentry_T global_functions[] =
     {"matcharg",	1, 1, FEARG_1,	  ret_list_string, f_matcharg},
     {"matchdelete",	1, 2, FEARG_1,	  ret_number,	f_matchdelete},
     {"matchend",	2, 4, FEARG_1,	  ret_number,	f_matchend},
+    {"matchfuzzy",	2, 3, FEARG_1,	  ret_list_string,	f_matchfuzzy},
+    {"matchfuzzypos",	2, 3, FEARG_1,	  ret_list_any,	f_matchfuzzypos},
     {"matchlist",	2, 4, FEARG_1,	  ret_list_string, f_matchlist},
     {"matchstr",	2, 4, FEARG_1,	  ret_string,	f_matchstr},
     {"matchstrpos",	2, 4, FEARG_1,	  ret_list_any,	f_matchstrpos},
@@ -774,7 +779,7 @@ static funcentry_T global_functions[] =
     {"nextnonblank",	1, 1, FEARG_1,	  ret_number,	f_nextnonblank},
     {"nr2char",		1, 2, FEARG_1,	  ret_string,	f_nr2char},
     {"or",		2, 2, FEARG_1,	  ret_number,	f_or},
-    {"pathshorten",	1, 1, FEARG_1,	  ret_string,	f_pathshorten},
+    {"pathshorten",	1, 2, FEARG_1,	  ret_string,	f_pathshorten},
     {"perleval",	1, 1, FEARG_1,	  ret_any,
 #ifdef FEAT_PERL
 	    f_perleval
@@ -1975,9 +1980,9 @@ f_deepcopy(typval_T *argvars, typval_T *rettv)
     int		copyID;
 
     if (argvars[1].v_type != VAR_UNKNOWN)
-	noref = (int)tv_get_number_chk(&argvars[1], NULL);
+	noref = (int)tv_get_bool_chk(&argvars[1], NULL);
     if (noref < 0 || noref > 1)
-	emsg(_(e_invarg));
+	semsg(_(e_using_number_as_bool_nr), noref);
     else
     {
 	copyID = get_copyID();
@@ -2431,6 +2436,12 @@ f_expand(typval_T *argvars, typval_T *rettv)
     expand_T	xpc;
     int		error = FALSE;
     char_u	*result;
+#ifdef BACKSLASH_IN_FILENAME
+    char_u	*p_csl_save = p_csl;
+
+    // avoid using 'completeslash' here
+    p_csl = empty_option;
+#endif
 
     rettv->v_type = VAR_STRING;
     if (argvars[1].v_type != VAR_UNKNOWN
@@ -2483,6 +2494,9 @@ f_expand(typval_T *argvars, typval_T *rettv)
 	else
 	    rettv->vval.v_string = NULL;
     }
+#ifdef BACKSLASH_IN_FILENAME
+    p_csl = p_csl_save;
+#endif
 }
 
 /*
@@ -2602,10 +2616,16 @@ f_feedkeys(typval_T *argvars, typval_T *rettv UNUSED)
 		msg_scroll = FALSE;
 
 		if (!dangerous)
+		{
 		    ++ex_normal_busy;
+		    ++in_feedkeys;
+		}
 		exec_normal(TRUE, lowlevel, TRUE);
 		if (!dangerous)
+		{
 		    --ex_normal_busy;
+		    --in_feedkeys;
+		}
 
 		msg_scroll |= save_msg_scroll;
 	    }
@@ -2914,7 +2934,7 @@ ret_f_function(int argcount, type_T **argtypes)
 {
     if (argcount == 1 && argtypes[0]->tt_type == VAR_STRING)
 	return &t_func_any;
-    return &t_func_void;
+    return &t_func_unknown;
 }
 
 /*
@@ -2936,7 +2956,7 @@ f_garbagecollect(typval_T *argvars, typval_T *rettv UNUSED)
     // using Lists and Dicts internally.  E.g.: ":echo [garbagecollect()]".
     want_garbage_collect = TRUE;
 
-    if (argvars[0].v_type != VAR_UNKNOWN && tv_get_number(&argvars[0]) == 1)
+    if (argvars[0].v_type != VAR_UNKNOWN && tv_get_bool(&argvars[0]) == 1)
 	garbage_collect_at_exit = TRUE;
 }
 
@@ -3254,7 +3274,8 @@ getpos_both(
     typval_T	*rettv,
     int		getcurpos)
 {
-    pos_T	*fp;
+    pos_T	*fp = NULL;
+    win_T	*wp = curwin;
     list_T	*l;
     int		fnum = -1;
 
@@ -3262,7 +3283,16 @@ getpos_both(
     {
 	l = rettv->vval.v_list;
 	if (getcurpos)
-	    fp = &curwin->w_cursor;
+	{
+	    if (argvars[0].v_type != VAR_UNKNOWN)
+	    {
+		wp = find_win_by_nr_or_id(&argvars[0]);
+		if (wp != NULL)
+		    fp = &wp->w_cursor;
+	    }
+	    else
+		fp = &curwin->w_cursor;
+	}
 	else
 	    fp = var2fpos(&argvars[0], TRUE, &fnum);
 	if (fnum != -1)
@@ -3282,13 +3312,14 @@ getpos_both(
 	    colnr_T save_curswant = curwin->w_curswant;
 	    colnr_T save_virtcol = curwin->w_virtcol;
 
-	    update_curswant();
-	    list_append_number(l, curwin->w_curswant == MAXCOL ?
-		    (varnumber_T)MAXCOL : (varnumber_T)curwin->w_curswant + 1);
+	    if (wp == curwin)
+		update_curswant();
+	    list_append_number(l, wp == NULL ? 0 : wp->w_curswant == MAXCOL
+		    ?  (varnumber_T)MAXCOL : (varnumber_T)wp->w_curswant + 1);
 
 	    // Do not change "curswant", as it is unexpected that a get
 	    // function has a side effect.
-	    if (save_set_curswant)
+	    if (wp == curwin && save_set_curswant)
 	    {
 		curwin->w_set_curswant = save_set_curswant;
 		curwin->w_curswant = save_curswant;
@@ -4763,7 +4794,7 @@ f_has(typval_T *argvars, typval_T *rettv)
 	}
     }
 
-    if (argvars[1].v_type != VAR_UNKNOWN && tv_get_number(&argvars[1]) != 0)
+    if (argvars[1].v_type != VAR_UNKNOWN && tv_get_bool(&argvars[1]))
 	// return whether feature could ever be enabled
 	rettv->vval.v_number = x;
     else
@@ -5874,7 +5905,7 @@ f_nr2char(typval_T *argvars, typval_T *rettv)
 	int	utf8 = 0;
 
 	if (argvars[1].v_type != VAR_UNKNOWN)
-	    utf8 = (int)tv_get_number_chk(&argvars[1], NULL);
+	    utf8 = (int)tv_get_bool_chk(&argvars[1], NULL);
 	if (utf8)
 	    buf[utf_char2bytes((int)tv_get_number(&argvars[0]), buf)] = NUL;
 	else
@@ -6876,8 +6907,8 @@ f_search(typval_T *argvars, typval_T *rettv)
     static void
 f_searchdecl(typval_T *argvars, typval_T *rettv)
 {
-    int		locally = 1;
-    int		thisblock = 0;
+    int		locally = TRUE;
+    int		thisblock = FALSE;
     int		error = FALSE;
     char_u	*name;
 
@@ -6886,9 +6917,9 @@ f_searchdecl(typval_T *argvars, typval_T *rettv)
     name = tv_get_string_chk(&argvars[0]);
     if (argvars[1].v_type != VAR_UNKNOWN)
     {
-	locally = (int)tv_get_number_chk(&argvars[1], &error) == 0;
+	locally = !(int)tv_get_bool_chk(&argvars[1], &error);
 	if (!error && argvars[2].v_type != VAR_UNKNOWN)
-	    thisblock = (int)tv_get_number_chk(&argvars[2], &error) != 0;
+	    thisblock = (int)tv_get_bool_chk(&argvars[2], &error);
     }
     if (!error && name != NULL)
 	rettv->vval.v_number = find_decl(name, (int)STRLEN(name),
@@ -7828,7 +7859,7 @@ f_spellsuggest(typval_T *argvars UNUSED, typval_T *rettv)
 		return;
 	    if (argvars[2].v_type != VAR_UNKNOWN)
 	    {
-		need_capital = (int)tv_get_number_chk(&argvars[2], &typeerr);
+		need_capital = (int)tv_get_bool_chk(&argvars[2], &typeerr);
 		if (typeerr)
 		    return;
 	    }
@@ -7884,7 +7915,7 @@ f_split(typval_T *argvars, typval_T *rettv)
 	if (pat == NULL)
 	    typeerr = TRUE;
 	if (argvars[2].v_type != VAR_UNKNOWN)
-	    keepempty = (int)tv_get_number_chk(&argvars[2], &typeerr);
+	    keepempty = (int)tv_get_bool_chk(&argvars[2], &typeerr);
     }
     if (pat == NULL || *pat == NUL)
 	pat = (char_u *)"[\\x01- ]\\+";
@@ -7982,7 +8013,7 @@ f_str2list(typval_T *argvars, typval_T *rettv)
 	return;
 
     if (argvars[1].v_type != VAR_UNKNOWN)
-	utf8 = (int)tv_get_number_chk(&argvars[1], NULL);
+	utf8 = (int)tv_get_bool_chk(&argvars[1], NULL);
 
     p = tv_get_string(&argvars[0]);
 
@@ -8030,7 +8061,7 @@ f_str2nr(typval_T *argvars, typval_T *rettv)
 	    emsg(_(e_invarg));
 	    return;
 	}
-	if (argvars[2].v_type != VAR_UNKNOWN && tv_get_number(&argvars[2]))
+	if (argvars[2].v_type != VAR_UNKNOWN && tv_get_bool(&argvars[2]))
 	    what |= STR2NR_QUOTE;
     }
 
@@ -8155,14 +8186,14 @@ f_strlen(typval_T *argvars, typval_T *rettv)
 f_strchars(typval_T *argvars, typval_T *rettv)
 {
     char_u		*s = tv_get_string(&argvars[0]);
-    int			skipcc = 0;
+    int			skipcc = FALSE;
     varnumber_T		len = 0;
     int			(*func_mb_ptr2char_adv)(char_u **pp);
 
     if (argvars[1].v_type != VAR_UNKNOWN)
-	skipcc = (int)tv_get_number_chk(&argvars[1], NULL);
+	skipcc = (int)tv_get_bool(&argvars[1]);
     if (skipcc < 0 || skipcc > 1)
-	emsg(_(e_invarg));
+	semsg(_(e_using_number_as_bool_nr), skipcc);
     else
     {
 	func_mb_ptr2char_adv = skipcc ? mb_ptr2char_adv : mb_cptr2char_adv;
@@ -8400,7 +8431,7 @@ f_submatch(typval_T *argvars, typval_T *rettv)
 	return;
     }
     if (argvars[1].v_type != VAR_UNKNOWN)
-	retList = (int)tv_get_number_chk(&argvars[1], &error);
+	retList = (int)tv_get_bool_chk(&argvars[1], &error);
     if (error)
 	return;
 
@@ -8487,7 +8518,7 @@ f_synID(typval_T *argvars UNUSED, typval_T *rettv)
 
     lnum = tv_get_lnum(argvars);		// -1 on type error
     col = (linenr_T)tv_get_number(&argvars[1]) - 1;	// -1 on type error
-    trans = (int)tv_get_number_chk(&argvars[2], &transerr);
+    trans = (int)tv_get_bool_chk(&argvars[2], &transerr);
 
     if (!transerr && lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count
 	    && col >= 0 && col < (long)STRLEN(ml_get(lnum)))
@@ -8573,7 +8604,9 @@ f_synIDattr(typval_T *argvars UNUSED, typval_T *rettv)
 		break;
 
 	case 'u':
-		if (STRLEN(what) <= 5 || TOLOWER_ASC(what[5]) != 'c')
+		if (TOLOWER_ASC(what[1]) == 'l')	// ul
+		    p = highlight_color(id, what, modec);
+		else if (STRLEN(what) <= 5 || TOLOWER_ASC(what[5]) != 'c')
 							// underline
 		    p = highlight_has_attr(id, HL_UNDERLINE, modec);
 		else

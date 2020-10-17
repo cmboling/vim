@@ -2465,6 +2465,7 @@ do_ecmd(
     bufref_T	old_curbuf;
     char_u	*free_fname = NULL;
 #ifdef FEAT_BROWSE
+    char_u	dot_path[] = ".";
     char_u	*browse_file = NULL;
 #endif
     int		retval = FAIL;
@@ -2511,7 +2512,7 @@ do_ecmd(
 		// No browsing supported but we do have the file explorer:
 		// Edit the directory.
 		if (ffname == NULL || !mch_isdir(ffname))
-		    ffname = (char_u *)".";
+		    ffname = dot_path;
 	    }
 	    else
 	    {
@@ -2849,9 +2850,12 @@ do_ecmd(
 	    new_name = NULL;
 	set_bufref(&bufref, buf);
 
-	if (p_ur < 0 || curbuf->b_ml.ml_line_count <= p_ur)
+	// If the buffer was used before, store the current contents so that
+	// the reload can be undone.  Do not do this if the (empty) buffer is
+	// being re-used for another file.
+	if (!(curbuf->b_flags & BF_NEVERLOADED)
+		&& (p_ur < 0 || curbuf->b_ml.ml_line_count <= p_ur))
 	{
-	    // Save all the text, so that the reload can be undone.
 	    // Sync first so that this is a separate undo-able action.
 	    u_sync(FALSE);
 	    if (u_savecommon(0, curbuf->b_ml.ml_line_count + 1, 0, TRUE)

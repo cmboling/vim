@@ -315,18 +315,22 @@ set_term_and_win_size(term_T *term, jobopt_T *opt)
     else if (cols != 0)
 	term->tl_cols = cols;
 
-    if (term->tl_rows != curwin->w_height)
-	win_setheight_win(term->tl_rows, curwin);
-    if (term->tl_cols != curwin->w_width)
-	win_setwidth_win(term->tl_cols, curwin);
-
-    // Set 'winsize' now to avoid a resize at the next redraw.
-    if (!minsize && *curwin->w_p_tws != NUL)
+    if (!opt->jo_hidden)
     {
-	char_u buf[100];
+	if (term->tl_rows != curwin->w_height)
+	    win_setheight_win(term->tl_rows, curwin);
+	if (term->tl_cols != curwin->w_width)
+	    win_setwidth_win(term->tl_cols, curwin);
 
-	vim_snprintf((char *)buf, 100, "%dx%d", term->tl_rows, term->tl_cols);
-	set_option_value((char_u *)"termwinsize", 0L, buf, OPT_LOCAL);
+	// Set 'winsize' now to avoid a resize at the next redraw.
+	if (!minsize && *curwin->w_p_tws != NUL)
+	{
+	    char_u buf[100];
+
+	    vim_snprintf((char *)buf, 100, "%dx%d",
+						 term->tl_rows, term->tl_cols);
+	    set_option_value((char_u *)"termwinsize", 0L, buf, OPT_LOCAL);
+	}
     }
 }
 
@@ -931,9 +935,30 @@ theend:
  * Return FAIL if writing fails.
  */
     int
-term_write_session(FILE *fd, win_T *wp)
+term_write_session(FILE *fd, win_T *wp, hashtab_T *terminal_bufs)
 {
-    term_T *term = wp->w_buffer->b_term;
+    const int	bufnr = wp->w_buffer->b_fnum;
+    term_T	*term = wp->w_buffer->b_term;
+
+    if (terminal_bufs != NULL && wp->w_buffer->b_nwindows > 1)
+    {
+	// There are multiple views into this terminal buffer. We don't want to
+	// create the terminal multiple times. If it's the first time, create,
+	// otherwise link to the first buffer.
+	char	    id_as_str[NUMBUFLEN];
+	hashitem_T  *entry;
+
+	vim_snprintf(id_as_str, sizeof(id_as_str), "%d", bufnr);
+
+	entry = hash_find(terminal_bufs, (char_u *)id_as_str);
+	if (!HASHITEM_EMPTY(entry))
+	{
+	    // we've already opened this terminal buffer
+	    if (fprintf(fd, "execute 'buffer ' . s:term_buf_%d", bufnr) < 0)
+		return FAIL;
+	    return put_eol(fd);
+	}
+    }
 
     // Create the terminal and run the command.  This is not without
     // risk, but let's assume the user only creates a session when this
@@ -947,6 +972,19 @@ term_write_session(FILE *fd, win_T *wp)
 #endif
     if (term->tl_command != NULL && fputs((char *)term->tl_command, fd) < 0)
 	return FAIL;
+    if (put_eol(fd) != OK)
+	return FAIL;
+
+    if (fprintf(fd, "let s:term_buf_%d = bufnr()", bufnr) < 0)
+	return FAIL;
+
+    if (terminal_bufs != NULL && wp->w_buffer->b_nwindows > 1)
+    {
+	char *hash_key = alloc(NUMBUFLEN);
+
+	vim_snprintf(hash_key, NUMBUFLEN, "%d", bufnr);
+	hash_add(terminal_bufs, (char_u *)hash_key);
+    }
 
     return put_eol(fd);
 }
@@ -2602,12 +2640,13 @@ if (raw_c > 0)
 	    }
 	    else if (termwinkey == 0 || c != termwinkey)
 	    {
-		char_u buf[MB_MAXBYTES + 2];
+		// space for CTRL-W, modifier, multi-byte char and NUL
+		char_u buf[1 + 3 + MB_MAXBYTES + 1];
 
 		// Put the command into the typeahead buffer, when using the
 		// stuff buffer KeyStuffed is set and 'langmap' won't be used.
 		buf[0] = Ctrl_W;
-		buf[(*mb_char2bytes)(c, buf + 1) + 1] = NUL;
+		buf[special_to_buf(c, mod_mask, FALSE, buf + 1) + 1] = NUL;
 		ins_typebuf(buf, REMAP_NONE, 0, TRUE, FALSE);
 		ret = OK;
 		goto theend;
@@ -5764,7 +5803,7 @@ f_term_gettty(typval_T *argvars, typval_T *rettv)
     if (buf == NULL)
 	return;
     if (argvars[1].v_type != VAR_UNKNOWN)
-	num = tv_get_number(&argvars[1]);
+	num = tv_get_bool(&argvars[1]);
 
     switch (num)
     {

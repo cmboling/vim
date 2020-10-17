@@ -912,7 +912,7 @@ func Test_terminal_composing_unicode()
   endif
 
   enew
-  let buf = term_start(cmd, {'curwin': bufnr('')})
+  let buf = term_start(cmd, {'curwin': 1})
   let g:job = term_getjob(buf)
   call WaitFor({-> term_getline(buf, 1) !=# ''}, 1000)
 
@@ -1377,6 +1377,23 @@ func Test_terminal_statusline()
   exe tbuf . 'bwipe!'
   au! BufLeave
   set statusline=
+endfunc
+
+func Test_terminal_window_focus()
+  let winid1 = win_getid()
+  terminal
+  let winid2 = win_getid()
+  call feedkeys("\<C-W>j", 'xt')
+  call assert_equal(winid1, win_getid())
+  call feedkeys("\<C-W>k", 'xt')
+  call assert_equal(winid2, win_getid())
+  " can use a cursor key here
+  call feedkeys("\<C-W>\<Down>", 'xt')
+  call assert_equal(winid1, win_getid())
+  call feedkeys("\<C-W>\<Up>", 'xt')
+  call assert_equal(winid2, win_getid())
+
+  bwipe!
 endfunc
 
 func Api_drop_common(options)

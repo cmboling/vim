@@ -11,6 +11,8 @@ int get_func_tv(char_u *name, int len, typval_T *rettv, char_u **arg, evalarg_T 
 char_u *fname_trans_sid(char_u *name, char_u *fname_buf, char_u **tofree, int *error);
 ufunc_T *find_func_even_dead(char_u *name, int is_global, cctx_T *cctx);
 ufunc_T *find_func(char_u *name, int is_global, cctx_T *cctx);
+int func_is_global(ufunc_T *ufunc);
+int func_name_refcount(char_u *name);
 void copy_func(char_u *lambda, char_u *global);
 int call_user_func_check(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rettv, funcexe_T *funcexe, dict_T *selfdict);
 void save_funccal(funccal_entry_T *entry);
@@ -27,7 +29,7 @@ int call_func(char_u *funcname, int len, typval_T *rettv, int argcount_in, typva
 char_u *printable_func_name(ufunc_T *fp);
 char_u *trans_function_name(char_u **pp, int *is_global, int skip, int flags, funcdict_T *fdp, partial_T **partial);
 char_u *untrans_function_name(char_u *name);
-ufunc_T *def_function(exarg_T *eap, char_u *name_arg);
+ufunc_T *define_function(exarg_T *eap, char_u *name_arg);
 void ex_function(exarg_T *eap);
 void ex_defcompile(exarg_T *eap);
 int eval_fname_script(char_u *p);

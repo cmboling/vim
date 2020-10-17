@@ -246,6 +246,7 @@ func Test_substitute_errors()
   call assert_fails("let s=substitute('abcda', [], 'A', 'g')", 'E730:')
   call assert_fails("let s=substitute('abcda', 'a', [], 'g')", 'E730:')
   call assert_fails("let s=substitute('abcda', 'a', 'A', [])", 'E730:')
+  call assert_fails("let s=substitute('abc', '\\%(', 'A', 'g')", 'E53:')
 
   bwipe!
 endfunc
@@ -879,6 +880,12 @@ func Test_invalid_submatch()
   call assert_equal('', submatch(1))
   call assert_equal([], submatch(0, 1))
   call assert_equal([], submatch(1, 1))
+endfunc
+
+func Test_submatch_list_concatenate()
+  let pat = 'A\(.\)'
+  let Rep = {-> string([submatch(0, 1)] + [[submatch(1)]])}
+  call substitute('A1', pat, Rep, '')->assert_equal("[['A1'], ['1']]")
 endfunc
 
 func Test_substitute_expr_arg()

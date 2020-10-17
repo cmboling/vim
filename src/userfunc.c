@@ -66,8 +66,9 @@ one_function_arg(char_u *arg, garray_T *newargs, garray_T *argtypes, int skip)
     while (ASCII_ISALNUM(*p) || *p == '_')
 	++p;
     if (arg == p || isdigit(*arg)
-	    || (p - arg == 9 && STRNCMP(arg, "firstline", 9) == 0)
-	    || (p - arg == 8 && STRNCMP(arg, "lastline", 8) == 0))
+	    || (argtypes == NULL
+		&& ((p - arg == 9 && STRNCMP(arg, "firstline", 9) == 0)
+		    || (p - arg == 8 && STRNCMP(arg, "lastline", 8) == 0))))
     {
 	if (!skip)
 	    semsg(_("E125: Illegal argument: %s"), arg);
@@ -210,7 +211,7 @@ get_function_args(
 	    if (argtypes != NULL)
 	    {
 		// ...name: list<type>
-		if (!ASCII_ISALPHA(*p))
+		if (!eval_isnamec1(*p))
 		{
 		    emsg(_(e_missing_name_after_dots));
 		    break;
@@ -875,6 +876,15 @@ find_func(char_u *name, int is_global, cctx_T *cctx)
 }
 
 /*
+ * Return TRUE if "ufunc" is a global function.
+ */
+    int
+func_is_global(ufunc_T *ufunc)
+{
+    return ufunc->uf_name[0] != K_SPECIAL;
+}
+
+/*
  * Copy the function name of "fp" to buffer "buf".
  * "buf" must be able to hold the function name plus three bytes.
  * Takes care of script-local function names.
@@ -882,7 +892,7 @@ find_func(char_u *name, int is_global, cctx_T *cctx)
     static void
 cat_func_name(char_u *buf, ufunc_T *fp)
 {
-    if (fp->uf_name[0] == K_SPECIAL)
+    if (!func_is_global(fp))
     {
 	STRCPY(buf, "<SNR>");
 	STRCAT(buf, fp->uf_name + 3);
@@ -1040,6 +1050,21 @@ cleanup_function_call(funccall_T *fc)
 	}
     }
 }
+
+/*
+ * There are two kinds of function names:
+ * 1. ordinary names, function defined with :function or :def
+ * 2. numbered functions and lambdas
+ * For the first we only count the name stored in func_hashtab as a reference,
+ * using function() does not count as a reference, because the function is
+ * looked up by name.
+ */
+    int
+func_name_refcount(char_u *name)
+{
+    return isdigit(*name) || *name == '<';
+}
+
 /*
  * Unreference "fc": decrement the reference count and free it when it
  * becomes zero.  "fp" is detached from "fc".
@@ -1109,6 +1134,7 @@ func_clear_items(ufunc_T *fp)
     ga_clear_strings(&(fp->uf_lines));
     VIM_CLEAR(fp->uf_arg_types);
     VIM_CLEAR(fp->uf_def_arg_idx);
+    VIM_CLEAR(fp->uf_block_ids);
     VIM_CLEAR(fp->uf_va_name);
     clear_type_list(&fp->uf_type_list);
 
@@ -1152,8 +1178,9 @@ func_clear(ufunc_T *fp, int force)
  * Free a function and remove it from the list of functions.  Does not free
  * what a function contains, call func_clear() first.
  * When "force" is TRUE we are exiting.
+ * Returns OK when the function was actually freed.
  */
-    static void
+    static int
 func_free(ufunc_T *fp, int force)
 {
     // Only remove it when not done already, otherwise we would remove a newer
@@ -1163,9 +1190,13 @@ func_free(ufunc_T *fp, int force)
 
     if ((fp->uf_flags & FC_DEAD) == 0 || force)
     {
+	if (fp->uf_dfunc_idx > 0)
+	    unlink_def_function(fp);
 	VIM_CLEAR(fp->uf_name_exp);
 	vim_free(fp);
+	return OK;
     }
+    return FAIL;
 }
 
 /*
@@ -1176,7 +1207,8 @@ func_free(ufunc_T *fp, int force)
 func_clear_free(ufunc_T *fp, int force)
 {
     func_clear(fp, force);
-    if (force || fp->uf_dfunc_idx == 0 || (fp->uf_flags & FC_COPY))
+    if (force || fp->uf_dfunc_idx == 0 || func_name_refcount(fp->uf_name)
+						   || (fp->uf_flags & FC_COPY))
 	func_free(fp, force);
     else
 	fp->uf_flags |= FC_DEAD;
@@ -1721,20 +1753,6 @@ call_user_func_check(
     return error;
 }
 
-/*
- * There are two kinds of function names:
- * 1. ordinary names, function defined with :function
- * 2. numbered functions and lambdas
- * For the first we only count the name stored in func_hashtab as a reference,
- * using function() does not count as a reference, because the function is
- * looked up by name.
- */
-    static int
-func_name_refcount(char_u *name)
-{
-    return isdigit(*name) || *name == '<';
-}
-
 static funccal_entry_T *funccal_stack = NULL;
 
 /*
@@ -1877,9 +1895,13 @@ free_all_functions(void)
 		    ++skipped;
 		else
 		{
-		    func_free(fp, FALSE);
-		    skipped = 0;
-		    break;
+		    if (func_free(fp, FALSE) == OK)
+		    {
+			skipped = 0;
+			break;
+		    }
+		    // did not actually free it
+		    ++skipped;
 		}
 	    }
     }
@@ -2353,6 +2375,7 @@ trans_function_name(
     int		extra = 0;
     lval_T	lv;
     int		vim9script;
+    static char *e_function_name = N_("E129: Function name required");
 
     if (fdp != NULL)
 	CLEAR_POINTER(fdp);
@@ -2380,7 +2403,7 @@ trans_function_name(
     if (end == start)
     {
 	if (!skip)
-	    emsg(_("E129: Function name required"));
+	    emsg(_(e_function_name));
 	goto theend;
     }
     if (end == NULL || (lv.ll_tv != NULL && (lead > 2 || lv.ll_range)))
@@ -2495,6 +2518,12 @@ trans_function_name(
 	    lv.ll_name += 2;
 	}
 	len = (int)(end - lv.ll_name);
+    }
+    if (len <= 0)
+    {
+	if (!skip)
+	    emsg(_(e_function_name));
+	goto theend;
     }
 
     // In Vim9 script a user function is script-local by default.
@@ -2630,7 +2659,7 @@ list_functions(regmatch_T *regmatch)
  * Returns a pointer to the function or NULL if no function defined.
  */
     ufunc_T *
-def_function(exarg_T *eap, char_u *name_arg)
+define_function(exarg_T *eap, char_u *name_arg)
 {
     char_u	*theline;
     char_u	*line_to_free = NULL;
@@ -3141,7 +3170,7 @@ def_function(exarg_T *eap, char_u *name_arg)
 	    }
 
 	    // Check for ":append", ":change", ":insert".  Not for :def.
-	    p = skip_range(p, NULL);
+	    p = skip_range(p, FALSE, NULL);
 	    if (eap->cmdidx != CMD_def
 		&& ((p[0] == 'a' && (!ASCII_ISALPHA(p[1]) || p[1] == 'p'))
 		    || (p[0] == 'c'
@@ -3193,19 +3222,20 @@ def_function(exarg_T *eap, char_u *name_arg)
 		is_heredoc = TRUE;
 	    }
 
-	    // Check for ":let v =<< [trim] EOF"
-	    //       and ":let [a, b] =<< [trim] EOF"
+	    // Check for ":cmd v =<< [trim] EOF"
+	    //       and ":cmd [a, b] =<< [trim] EOF"
+	    // Where "cmd" can be "let", "var", "final" or "const".
 	    arg = skipwhite(skiptowhite(p));
 	    if (*arg == '[')
 		arg = vim_strchr(arg, ']');
 	    if (arg != NULL)
 	    {
 		arg = skipwhite(skiptowhite(arg));
-		if ( arg[0] == '=' && arg[1] == '<' && arg[2] =='<'
-			&& ((p[0] == 'l'
-				&& p[1] == 'e'
-				&& (!ASCII_ISALNUM(p[2])
-				    || (p[2] == 't' && !ASCII_ISALNUM(p[3]))))))
+		if (arg[0] == '=' && arg[1] == '<' && arg[2] =='<'
+			&& (checkforcmd(&p, "let", 2)
+			    || checkforcmd(&p, "var", 3)
+			    || checkforcmd(&p, "final", 5)
+			    || checkforcmd(&p, "const", 5)))
 		{
 		    p = skipwhite(arg + 3);
 		    if (STRNCMP(p, "trim", 4) == 0)
@@ -3337,11 +3367,11 @@ def_function(exarg_T *eap, char_u *name_arg)
 	if (fudi.fd_di == NULL)
 	{
 	    // Can't add a function to a locked dictionary
-	    if (var_check_lock(fudi.fd_dict->dv_lock, eap->arg, FALSE))
+	    if (value_check_lock(fudi.fd_dict->dv_lock, eap->arg, FALSE))
 		goto erret;
 	}
 	    // Can't change an existing function if it is locked
-	else if (var_check_lock(fudi.fd_di->di_tv.v_lock, eap->arg, FALSE))
+	else if (value_check_lock(fudi.fd_di->di_tv.v_lock, eap->arg, FALSE))
 	    goto erret;
 
 	// Give the function a sequential number.  Can only be used with a
@@ -3448,9 +3478,24 @@ def_function(exarg_T *eap, char_u *name_arg)
 	// error messages are for the first function line
 	SOURCING_LNUM = sourcing_lnum_top;
 
+	if (eap->cstack != NULL && eap->cstack->cs_idx >= 0)
+	{
+	    int count = eap->cstack->cs_idx + 1;
+
+	    // The block context may be needed for script variables declared in
+	    // a block visible now but not when the function is compiled.
+	    fp->uf_block_ids = ALLOC_MULT(int, count);
+	    if (fp->uf_block_ids != NULL)
+	    {
+		mch_memmove(fp->uf_block_ids, eap->cstack->cs_block_id,
+							  sizeof(int) * count);
+		fp->uf_block_depth = count;
+	    }
+	    // TODO: set flag in each block to indicate a function was defined
+	}
+
 	// parse the argument types
 	ga_init2(&fp->uf_type_list, sizeof(type_T *), 10);
-
 	if (argtypes.ga_len > 0)
 	{
 	    // When "varargs" is set the last name/type goes into uf_va_name
@@ -3579,11 +3624,12 @@ ret_free:
     void
 ex_function(exarg_T *eap)
 {
-    (void)def_function(eap, NULL);
+    (void)define_function(eap, NULL);
 }
 
 /*
- * :defcompile - compile all :def functions in the current script.
+ * :defcompile - compile all :def functions in the current script that need to
+ * be compiled.  Except dead functions.
  */
     void
 ex_defcompile(exarg_T *eap UNUSED)
@@ -3600,7 +3646,8 @@ ex_defcompile(exarg_T *eap UNUSED)
 	    --todo;
 	    ufunc = HI2UF(hi);
 	    if (ufunc->uf_script_ctx.sc_sid == current_sctx.sc_sid
-		    && ufunc->uf_def_status == UF_TO_BE_COMPILED)
+		    && ufunc->uf_def_status == UF_TO_BE_COMPILED
+		    && (ufunc->uf_flags & FC_DEAD) == 0)
 	    {
 		compile_def_function(ufunc, FALSE, NULL);
 

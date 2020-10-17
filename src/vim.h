@@ -1992,7 +1992,8 @@ typedef int sock_T;
 #define VV_ECHOSPACE	93
 #define VV_ARGV		94
 #define VV_COLLATE      95
-#define VV_LEN		96	// number of v: vars
+#define VV_DISALLOW_LET 96	// TODO: remove again
+#define VV_LEN		97	// number of v: vars
 
 // used for v_number in VAR_BOOL and VAR_SPECIAL
 #define VVAL_FALSE	0L	// VAR_BOOL
@@ -2097,8 +2098,7 @@ typedef struct stat stat_T;
 # define USE_PRINTF_FORMAT_ATTRIBUTE
 #endif
 
-typedef enum
-{
+typedef enum {
     ASSERT_EQUAL,
     ASSERT_NOTEQUAL,
     ASSERT_MATCH,
@@ -2128,9 +2128,17 @@ typedef enum {
     USEPOPUP_HIDDEN	// use info popup initially hidden
 } use_popup_T;
 
+// Argument for estack_sfile().
+typedef enum {
+    ESTACK_NONE,
+    ESTACK_SFILE,
+    ESTACK_STACK
+} estack_arg_T;
+
 // Flags for assignment functions.
-#define LET_IS_CONST	1   // ":const"
-#define LET_NO_COMMAND	2   // "var = expr" without ":let" or ":const"
+#define ASSIGN_FINAL	1   // ":final"
+#define ASSIGN_CONST	2   // ":const"
+#define ASSIGN_NO_DECL	4   // "name = expr" without ":let" or ":const"
 
 #include "ex_cmds.h"	    // Ex command defines
 #include "spell.h"	    // spell checking stuff

@@ -58,6 +58,8 @@ typedef enum {
     ISN_UNLET,		// unlet variable isn_arg.unlet.ul_name
     ISN_UNLETENV,	// unlet environment variable isn_arg.unlet.ul_name
 
+    ISN_LOCKCONST,	// lock constant value
+
     // constants
     ISN_PUSHNR,		// push number isn_arg.number
     ISN_PUSHBOOL,	// push bool value isn_arg.number
@@ -126,7 +128,8 @@ typedef enum {
     ISN_GETITEM,    // push list item, isn_arg.number is the index
     ISN_MEMBER,	    // dict[member]
     ISN_STRINGMEMBER, // dict.member using isn_arg.string
-    ISN_2BOOL,	    // convert value to bool, invert if isn_arg.number != 0
+    ISN_2BOOL,	    // falsy/truthy to bool, invert if isn_arg.number != 0
+    ISN_COND2BOOL,  // convert value to bool
     ISN_2STRING,    // convert value to string at isn_arg.number on stack
     ISN_2STRING_ANY, // like ISN_2STRING but check type
     ISN_NEGATENR,   // apply "-" to number
@@ -134,6 +137,8 @@ typedef enum {
     ISN_CHECKNR,    // check value can be used as a number
     ISN_CHECKTYPE,  // check value type is isn_arg.type.tc_type
     ISN_CHECKLEN,   // check list length is isn_arg.checklen.cl_min_len
+
+    ISN_PUT,	    // ":put", uses isn_arg.put
 
     ISN_SHUFFLE,    // move item on stack up or down
     ISN_DROP	    // pop stack and discard value
@@ -167,8 +172,10 @@ typedef struct {
 typedef enum {
     JUMP_ALWAYS,
     JUMP_IF_FALSE,		// pop and jump if false
-    JUMP_AND_KEEP_IF_TRUE,	// jump if top of stack is true, drop if not
-    JUMP_AND_KEEP_IF_FALSE,	// jump if top of stack is false, drop if not
+    JUMP_AND_KEEP_IF_TRUE,	// jump if top of stack is truthy, drop if not
+    JUMP_AND_KEEP_IF_FALSE,	// jump if top of stack is falsy, drop if not
+    JUMP_IF_COND_TRUE,		// jump if top of stack is true, drop if not
+    JUMP_IF_COND_FALSE,		// jump if top of stack is false, drop if not
 } jumpwhen_T;
 
 // arguments to ISN_JUMP
@@ -203,7 +210,7 @@ typedef struct {
 
 // arguments to ISN_CHECKTYPE
 typedef struct {
-    vartype_T	ct_type;
+    type_T	*ct_type;
     int		ct_off;	    // offset in stack, -1 is bottom
 } checktype_T;
 
@@ -240,7 +247,6 @@ typedef struct {
 // arguments to ISN_FUNCREF
 typedef struct {
     int		fr_func;	// function index
-    int		fr_var_idx;	// variable to store partial
 } funcref_T;
 
 // arguments to ISN_NEWFUNC
@@ -260,6 +266,12 @@ typedef struct {
     int		shfl_item;	// item to move (relative to top of stack)
     int		shfl_up;	// places to move upwards
 } shuffle_T;
+
+// arguments to ISN_PUT
+typedef struct {
+    int		put_regname;	// register, can be NUL
+    linenr_T	put_lnum;	// line number to put below
+} put_T;
 
 /*
  * Instruction
@@ -296,6 +308,7 @@ struct isn_S {
 	newfunc_T	    newfunc;
 	checklen_T	    checklen;
 	shuffle_T	    shuffle;
+	put_T		    put;
     } isn_arg;
 };
 
@@ -312,14 +325,16 @@ struct dfunc_S {
     int		df_instr_count;
 
     int		df_varcount;	    // number of local variables
-    int		df_closure_count;   // number of closures created
+    int		df_has_closure;	    // one if a closure was created
 };
 
 // Number of entries used by stack frame for a function call.
-// - function index
-// - instruction index
-// - previous frame index
-#define STACK_FRAME_SIZE 3
+// - ec_dfunc_idx:   function index
+// - ec_iidx:        instruction index
+// - ec_outer_stack: stack used for closures  TODO: can we avoid this?
+// - ec_outer_frame: stack frame for closures
+// - ec_frame_idx:   previous frame index
+#define STACK_FRAME_SIZE 5
 
 
 #ifdef DEFINE_VIM9_GLOBALS

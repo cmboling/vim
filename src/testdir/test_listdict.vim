@@ -348,13 +348,13 @@ func Test_dict_deepcopy()
   let l[1] = l2
   let l3 = deepcopy(l2)
   call assert_true(l3[1] is l3[2])
-  call assert_fails("call deepcopy([1, 2], 2)", 'E474:')
+  call assert_fails("call deepcopy([1, 2], 2)", 'E1023:')
 endfunc
 
 " Locked variables
 func Test_list_locked_var()
   let expected = [
-	      \ [['0000-000', 'ppppppp'],
+	      \ [['1000-000', 'ppppppF'],
 	      \  ['0000-000', 'ppppppp'],
 	      \  ['0000-000', 'ppppppp']],
 	      \ [['1000-000', 'ppppppF'],
@@ -381,7 +381,7 @@ func Test_list_locked_var()
         exe "unlockvar " . depth . " l"
       endif
       let ps = islocked("l").islocked("l[1]").islocked("l[1][1]").islocked("l[1][1][0]").'-'.islocked("l[2]").islocked("l[2]['6']").islocked("l[2]['6'][7]")
-      call assert_equal(expected[depth][u][0], ps)
+      call assert_equal(expected[depth][u][0], ps, 'depth: ' .. depth)
       let ps = ''
       try
         let l[1][1][0] = 99
@@ -425,7 +425,7 @@ func Test_list_locked_var()
       catch
         let ps .= 'F'
       endtry
-      call assert_equal(expected[depth][u][1], ps)
+      call assert_equal(expected[depth][u][1], ps, 'depth: ' .. depth)
     endfor
   endfor
   call assert_fails("let x=islocked('a b')", 'E488:')
@@ -438,7 +438,7 @@ endfunc
 " Unletting locked variables
 func Test_list_locked_var_unlet()
   let expected = [
-	      \ [['0000-000', 'ppppppp'],
+	      \ [['1000-000', 'ppppppp'],
 	      \  ['0000-000', 'ppppppp'],
 	      \  ['0000-000', 'ppppppp']],
 	      \ [['1000-000', 'ppFppFp'],
@@ -466,7 +466,7 @@ func Test_list_locked_var_unlet()
         exe "unlockvar " . depth . " l"
       endif
       let ps = islocked("l").islocked("l[1]").islocked("l[1][1]").islocked("l[1][1][0]").'-'.islocked("l[2]").islocked("l[2]['6']").islocked("l[2]['6'][7]")
-      call assert_equal(expected[depth][u][0], ps)
+      call assert_equal(expected[depth][u][0], ps, 'depth: ' .. depth)
       let ps = ''
       try
         unlet l[2]['6'][7]
@@ -666,6 +666,9 @@ func Test_func_arg_list()
   call s:arg_list_test(1, 2, [3, 4], {5: 6})
 endfunc
 
+func Test_dict_item_locked()
+endfunc
+
 " Tests for reverse(), sort(), uniq()
 func Test_reverse_sort_uniq()
   let l = ['-0', 'A11', 2, 2, 'xaaa', 4, 'foo', 'foo6', 'foo', [0, 1, 2], 'x8', [0, 1, 2], 1.5]
@@ -723,6 +726,8 @@ func Test_reduce()
   call assert_fails("call reduce({}, { acc, val -> acc + val }, 1)", 'E897:')
   call assert_fails("call reduce(0, { acc, val -> acc + val }, 1)", 'E897:')
   call assert_fails("call reduce('', { acc, val -> acc + val }, 1)", 'E897:')
+  call assert_fails("call reduce([1, 2], 'Xdoes_not_exist')", 'E117:')
+  call assert_fails("echo reduce(0z01, { acc, val -> 2 * acc + val }, '')", 'E39:')
 
   let g:lut = [1, 2, 3, 4]
   func EvilRemove()
@@ -750,6 +755,7 @@ func Test_str_split()
   call assert_equal(['', 'a', '', 'b', '', 'c', ''], split('abc', '\zs', 1))
   call assert_fails("call split('abc', [])", 'E730:')
   call assert_fails("call split('abc', 'b', [])", 'E745:')
+  call assert_equal(['abc'], split('abc', '\\%('))
 endfunc
 
 " compare recursively linked list and dict
@@ -1001,8 +1007,10 @@ func Test_null_list()
   call assert_equal('[]', string(l))
   call assert_equal(0, sort(l))
   call assert_equal(0, uniq(l))
-  call assert_fails("let k = [] + l", 'E15:')
-  call assert_fails("let k = l + []", 'E15:')
+  let k = [] + l
+  call assert_equal([], k)
+  let k = l + []
+  call assert_equal([], k)
   call assert_equal(0, len(copy(l)))
   call assert_equal(0, count(l, 5))
   call assert_equal([], deepcopy(l))

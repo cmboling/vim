@@ -1430,6 +1430,30 @@ func Test_quickfix_was_changed_by_autocmd()
   call XquickfixChangedByAutocmd('l')
 endfunc
 
+func Test_setloclist_in_autocommand()
+  call writefile(['test1', 'test2'], 'Xfile')
+  edit Xfile
+  let s:bufnr = bufnr()
+  call setloclist(1,
+        \ [{'bufnr' : s:bufnr, 'lnum' : 1, 'text' : 'test1'},
+        \  {'bufnr' : s:bufnr, 'lnum' : 2, 'text' : 'test2'}])
+
+  augroup Test_LocList
+    au!
+    autocmd BufEnter * call setloclist(1,
+          \ [{'bufnr' : s:bufnr, 'lnum' : 1, 'text' : 'test1'},
+          \  {'bufnr' : s:bufnr, 'lnum' : 2, 'text' : 'test2'}], 'r')
+  augroup END
+
+  lopen
+  call assert_fails('exe "normal j\<CR>"', 'E926:')
+
+  augroup Test_LocList
+    au!
+  augroup END
+  call delete('Xfile')
+endfunc
+
 func Test_caddbuffer_to_empty()
   helpgr quickfix
   call setqflist([], 'r')
@@ -1742,6 +1766,24 @@ endfunc
 func Test_long_lines()
   call s:long_lines_tests('c')
   call s:long_lines_tests('l')
+endfunc
+
+func Test_cgetfile_on_long_lines()
+  " Problematic values if the line is longer than 4096 bytes.  Then 1024 bytes
+  " are read at a time.
+  for len in [4078, 4079, 4080, 5102, 5103, 5104, 6126, 6127, 6128, 7150, 7151, 7152]
+    let lines = [
+      \ '/tmp/file1:1:1:aaa',
+      \ '/tmp/file2:1:1:%s',
+      \ '/tmp/file3:1:1:bbb',
+      \ '/tmp/file4:1:1:ccc',
+      \ ]
+    let lines[1] = substitute(lines[1], '%s', repeat('x', len), '')
+    call writefile(lines, 'Xcqetfile.txt')
+    cgetfile Xcqetfile.txt
+    call assert_equal(4, getqflist(#{size: v:true}).size, 'with length ' .. len)
+  endfor
+  call delete('Xcqetfile.txt')
 endfunc
 
 func s:create_test_file(filename)
@@ -3954,6 +3996,18 @@ func Test_shorten_fname()
   " Displaying the quickfix list should simplify the file path
   silent! clist
   call assert_equal('test_quickfix.vim', bufname('test_quickfix.vim'))
+  " Add a few entries for the same file with different paths and check whether
+  " the buffer name is shortened
+  %bwipe
+  call setqflist([], 'f')
+  call setqflist([{'filename' : 'test_quickfix.vim', 'lnum' : 10},
+        \ {'filename' : '../testdir/test_quickfix.vim', 'lnum' : 20},
+        \ {'filename' : fname, 'lnum' : 30}], ' ')
+  copen
+  call assert_equal(['test_quickfix.vim|10| ',
+        \ 'test_quickfix.vim|20| ',
+        \ 'test_quickfix.vim|30| '], getline(1, '$'))
+  cclose
 endfunc
 
 " Quickfix title tests
