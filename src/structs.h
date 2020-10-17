@@ -1533,6 +1533,13 @@ struct blobvar_S
 typedef int (*cfunc_T)(int argcount, typval_T *argvars, typval_T *rettv, void *state);
 typedef void (*cfunc_free_T)(void *state);
 
+// type of getline() last argument
+typedef enum {
+    GETLINE_NONE,	    // do not concatenate any lines
+    GETLINE_CONCAT_CONT,    // concatenate continuation lines
+    GETLINE_CONCAT_ALL	    // concatenate continuation and Vim9 # comment lines
+} getline_opt_T;
+
 #if defined(FEAT_EVAL) || defined(PROTO)
 typedef struct funccall_S funccall_T;
 
@@ -1594,7 +1601,9 @@ typedef struct
     int		uf_tml_execed;	// line being timed was executed
 # endif
     sctx_T	uf_script_ctx;	// SCTX where function was defined,
-				// used for s: variables
+				// used for s: variables; sc_version changed
+				// for :function
+    int		uf_script_ctx_version;  // original sc_version of SCTX
     int		uf_refcount;	// reference count, see func_name_refcount()
 
     funccall_T	*uf_scoped;	// l: local variables for closure
@@ -1766,7 +1775,7 @@ typedef struct {
     int		eval_break_count;   // nr of line breaks consumed
 
     // copied from exarg_T when "getline" is "getsourceline". Can be NULL.
-    char_u	*(*eval_getline)(int, void *, int, int);
+    char_u	*(*eval_getline)(int, void *, int, getline_opt_T);
     void	*eval_cookie;	    // argument for eval_getline()
 
     // used when compiling a :def function, NULL otherwise
@@ -2527,9 +2536,6 @@ struct file_buffer
     int		b_dev_valid;	// TRUE when b_dev has a valid number
     dev_t	b_dev;		// device number
     ino_t	b_ino;		// inode number
-#endif
-#ifdef FEAT_CW_EDITOR
-    FSSpec	b_FSSpec;	// MacOS File Identification
 #endif
 #ifdef VMS
     char	 b_fab_rfm;	// Record format
@@ -3787,15 +3793,6 @@ struct VimMenu
 # ifdef FEAT_TOOLBAR
     BPictureButton *button;
 # endif
-#endif
-#ifdef FEAT_GUI_MAC
-//  MenuHandle	id;
-//  short	index;		    // the item index within the father menu
-    short	menu_id;	    // the menu id to which this item belongs
-    short	submenu_id;	    // the menu id of the children (could be
-				    // get through some tricks)
-    MenuHandle	menu_handle;
-    MenuHandle	submenu_handle;
 #endif
 #ifdef FEAT_GUI_PHOTON
     PtWidget_t	*id;

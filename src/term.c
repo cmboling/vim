@@ -1763,6 +1763,7 @@ get_term_entries(int *height, int *width)
 report_term_error(char *error_msg, char_u *term)
 {
     struct builtin_term *termp;
+    int			i;
 
     mch_errmsg("\r\n");
     if (error_msg != NULL)
@@ -1787,6 +1788,10 @@ report_term_error(char *error_msg, char_u *term)
 	    mch_errmsg("\r\n");
 	}
     }
+    // Output extra 'cmdheight' line breaks to avoid that the following error
+    // message overwrites the last terminal name.
+    for (i = 1; i < p_ch; ++i)
+	mch_errmsg("\r\n");
 }
 
     static void
@@ -3593,7 +3598,7 @@ stoptermcap(void)
 	    {
 # ifdef UNIX
 		// Give the terminal a chance to respond.
-		mch_delay(100L, FALSE);
+		mch_delay(100L, 0);
 # endif
 # ifdef TCIFLUSH
 		// Discard data received but not read.

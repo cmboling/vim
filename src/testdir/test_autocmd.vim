@@ -29,19 +29,18 @@ func Test_CursorHold_autocmd()
   END
   call writefile(before, 'Xinit')
   let buf = RunVimInTerminal('-S Xinit Xfile', {})
-  call term_wait(buf)
+  call term_sendkeys(buf, "G")
+  call term_wait(buf, 20)
   call term_sendkeys(buf, "gg")
   call term_wait(buf)
-  sleep 50m
+  call WaitForAssert({-> assert_equal(['1'], readfile('Xoutput')[-1:-1])})
   call term_sendkeys(buf, "j")
   call term_wait(buf)
-  sleep 50m
+  call WaitForAssert({-> assert_equal(['1', '2'], readfile('Xoutput')[-2:-1])})
   call term_sendkeys(buf, "j")
   call term_wait(buf)
-  sleep 50m
+  call WaitForAssert({-> assert_equal(['1', '2', '3'], readfile('Xoutput')[-3:-1])})
   call StopVimInTerminal(buf)
-
-  call assert_equal(['1', '2', '3'], readfile('Xoutput')[-3:-1])
 
   call delete('Xinit')
   call delete('Xoutput')
@@ -70,9 +69,7 @@ if has('timers')
   endfunc
 
   func Test_cursorhold_insert_with_timer_interrupt()
-    if !has('job')
-      return
-    endif
+    CheckFeature job
     " Need to move the cursor.
     call feedkeys("ggG", "xt")
 
@@ -535,9 +532,7 @@ func s:AutoCommandOptionSet(match)
 endfunc
 
 func Test_OptionSet()
-  if !has("eval") || !exists("+autochdir")
-    return
-  endif
+  CheckOption autochdir
 
   badd test_autocmd.vim
 
@@ -1618,7 +1613,7 @@ func Test_change_mark_in_autocmds()
   write
   au! BufWritePre
 
-  if executable('cat')
+  if has('unix')
     write XtestFilter
     write >> XtestFilter
 
@@ -1778,12 +1773,11 @@ func Test_nocatch_wipe_all_buffers()
 endfunc
 
 func Test_nocatch_wipe_dummy_buffer()
-  if has('quickfix')
-    " Nasty autocommand: wipe buffer on any event.
-    au * x bwipe
-    call assert_fails('lv½ /x', 'E937')
-    au!
-  endif
+  CheckFeature quickfix
+  " Nasty autocommand: wipe buffer on any event.
+  au * x bwipe
+  call assert_fails('lv½ /x', 'E937')
+  au!
 endfunc
 
 function s:Before_test_dirchanged()
@@ -1834,9 +1828,7 @@ function Test_dirchanged_local()
 endfunc
 
 function Test_dirchanged_auto()
-  if !exists('+autochdir')
-    return
-  endif
+  CheckOption autochdir
   call s:Before_test_dirchanged()
   call test_autochdir()
   autocmd test_dirchanged DirChanged auto call add(s:li, "auto:")
@@ -2087,9 +2079,8 @@ endfunc
 " - FileReadPost	decompress the file
 func Test_ReadWrite_Autocmds()
   " Run this test only on Unix-like systems and if gzip is available
-  if !has('unix') || !executable("gzip")
-    return
-  endif
+  CheckUnix
+  CheckExecutable gzip
 
   " Make $GZIP empty, "-v" would cause trouble.
   let $GZIP = ""
