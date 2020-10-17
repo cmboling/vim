@@ -38,8 +38,10 @@ FEATURES=HUGE
 PYTHON=c:/python27
 PYTHON_VER=27
 
+#PYTHON3=$(PY3_ROOT)
 # uncomment 'PYTHON3' if you want a python3-enabled version
-PYTHON3=C:/Python_372_64bit
+# PYTHON3=C:/Python_372_64bit
+PYTHON3=C:/Python37
 PYTHON3_VER=37
 
 # uncomment 'TCL' if you want a Tcl-enabled version

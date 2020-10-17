@@ -148,7 +148,6 @@
 #
 # Example: To build the non-debug, GUI version with Perl interface:
 #	nmake -f Make_mvc.mak GUI=yes PERL=C:\Perl
-#>>>>>>> 3d9207ad2fc98b4f92f77b5a3d52a3a4d25b9561
 
 ### See feature.h for a list of optionals.
 # If you want to build some optional features without modifying the source,
@@ -1478,7 +1477,6 @@ cmdidxs: ex_cmds.h
 test:
 	cd testdir
 	$(MAKE) /NOLOGO -f Make_dos.mak
->>>>>>> 8b565c2c1522e0c41e3d18e1bb6e1bc4b3686842
 	cd ..
 
 testgvim:
@@ -1494,7 +1492,6 @@ testtiny:
 testgvimtiny:
 	cd testdir
 	$(MAKE) /NOLOGO -f Make_dos.mak tiny VIMPROG=..\gvim
->>>>>>> 8b565c2c1522e0c41e3d18e1bb6e1bc4b3686842
 	cd ..
 
 testclean:
