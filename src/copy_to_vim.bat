@@ -1,2 +1,2 @@
 
-copy *.exe $VIMRUNTIME
+copy *.exe %VIMRUNTIME%

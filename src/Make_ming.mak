@@ -35,8 +35,8 @@ FEATURES=HUGE
 # on my Linux box, I put the Python stuff here:
 #PYTHON=/home/ron/ActivePython-2.0.0-202/src/Core
 # on my NT box, it's here:
-PYTHON=c:/python27
-PYTHON_VER=27
+#PYTHON=c:/python27
+#PYTHON_VER=27
 
 #PYTHON3=$(PY3_ROOT)
 # uncomment 'PYTHON3' if you want a python3-enabled version

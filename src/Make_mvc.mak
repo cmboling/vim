@@ -145,7 +145,6 @@
 # Example: To build the non-debug, GUI version with Perl interface:
 #	nmake -f Make_mvc.mak GUI=yes PERL=C:\Perl
 
-
 ### See feature.h for a list of optionals.
 # If you want to build some optional features without modifying the source,
 # you can set DEFINES on the command line, e.g.,
