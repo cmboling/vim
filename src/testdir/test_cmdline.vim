@@ -185,6 +185,8 @@ func Test_map_completion()
   unmap <Left>
   set cpo-=k
 
+  call assert_fails('call feedkeys(":map \\\\%(\<Tab>\<Home>\"\<CR>", "xt")', 'E53:')
+
   unmap <Middle>x
   set cpo&vim
 endfunc
@@ -754,6 +756,10 @@ func Test_cmdline_complete_various()
   call feedkeys(":doautocmd User MyCmd a.c\<C-A>\<C-B>\"\<CR>", 'xt')
   call assert_equal("\"doautocmd User MyCmd a.c\<C-A>", @:)
 
+  " completion of autocmd group after comma
+  call feedkeys(":doautocmd BufNew,BufEn\<C-A>\<C-B>\"\<CR>", 'xt')
+  call assert_equal("\"doautocmd BufNew,BufEnter", @:)
+
   " completion for the :augroup command
   augroup XTest
   augroup END
@@ -829,6 +835,15 @@ func Test_cmdline_complete_various()
   " completion after a range followed by a pipe (|) character
   call feedkeys(":1,10 | chist\t\<C-B>\"\<CR>", 'xt')
   call assert_equal('"1,10 | chistory', @:)
+
+  " use <Esc> as the 'wildchar' for completion
+  set wildchar=<Esc>
+  call feedkeys(":g/a\\xb/clearj\<Esc>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"g/a\xb/clearjumps', @:)
+  " pressing <esc> twice should cancel the command
+  call feedkeys(":chist\<Esc>\<Esc>", 'xt')
+  call assert_equal('"g/a\xb/clearjumps', @:)
+  set wildchar&
 endfunc
 
 func Test_cmdline_write_alternatefile()

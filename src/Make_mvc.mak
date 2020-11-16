@@ -15,11 +15,7 @@
 # This will build the console version of Vim with no additional interfaces.
 # To add features, define any of the following:
 #
-# 	For MSVC 11, if you want to include Win32.mak, you need to specify
-# 	where the file is, e.g.:
-# 	   SDK_INCLUDE_DIR="C:\Program Files\Microsoft SDKs\Windows\v7.1\Include"
-#
-#	!!!!  After changing features do "nmake clean" first  !!!!
+#	!!!!  After changing any features do "nmake clean" first  !!!!
 #
 #	Feature Set: FEATURES=[TINY, SMALL, NORMAL, BIG, HUGE] (default is HUGE)
 #
@@ -217,9 +213,6 @@ OBJDIR = $(OBJDIR)V
 OBJDIR = $(OBJDIR)d
 !endif
 
-# If you include Win32.mak, it requires that CPU be set appropriately.
-# To cross-compile for Win64, set CPU=AMD64 or CPU=IA64.
-
 !ifdef PROCESSOR_ARCHITECTURE
 # We're on Windows NT or using VC 6+
 ! ifdef CPU
@@ -259,18 +252,7 @@ NODEBUG = 1
 MAKEFLAGS_GVIMEXT = DEBUG=yes
 !endif
 
-
-# Get all sorts of useful, standard macros from the Platform SDK,
-# if SDK_INCLUDE_DIR is set or USE_WIN32MAK is set to "yes".
-
-!ifdef SDK_INCLUDE_DIR
-! include $(SDK_INCLUDE_DIR)\Win32.mak
-!elseif "$(USE_WIN32MAK)"=="yes"
-! include <Win32.mak>
-!else
 link = link
-!endif
-
 
 # Check VC version.
 !if [echo MSVCVER=_MSC_VER> msvcver.c && $(CC) /EP msvcver.c > msvcver.~ 2> nul]
@@ -479,8 +461,8 @@ SOUND_LIB	= winmm.lib
 !endif
 
 !if "$(CHANNEL)" == "yes"
-CHANNEL_PRO	= proto/channel.pro
-CHANNEL_OBJ	= $(OBJDIR)/channel.obj
+CHANNEL_PRO	= proto/job.pro proto/channel.pro
+CHANNEL_OBJ	= $(OBJDIR)/job.obj $(OBJDIR)/channel.obj
 CHANNEL_DEFS	= -DFEAT_JOB_CHANNEL -DFEAT_IPV6
 ! if $(WINVER) >= 0x600
 CHANNEL_DEFS	= $(CHANNEL_DEFS) -DHAVE_INET_NTOP
@@ -1686,6 +1668,8 @@ $(OUTDIR)/if_tcl.obj: $(OUTDIR) if_tcl.c  $(INCL)
 $(OUTDIR)/iscygpty.obj:	$(OUTDIR) iscygpty.c $(CUI_INCL)
 	$(CC) $(CFLAGS_OUTDIR) iscygpty.c -D_WIN32_WINNT=0x0600 -DUSE_DYNFILEID -DENABLE_STUB_IMPL
 
+$(OUTDIR)/job.obj:	$(OUTDIR) job.c $(INCL)
+
 $(OUTDIR)/json.obj:	$(OUTDIR) json.c  $(INCL)
 
 $(OUTDIR)/list.obj:	$(OUTDIR) list.c  $(INCL)
@@ -1716,11 +1700,11 @@ $(OUTDIR)/mouse.obj:	$(OUTDIR) mouse.c  $(INCL)
 
 $(OUTDIR)/move.obj:	$(OUTDIR) move.c  $(INCL)
 
-$(OUTDIR)/mbyte.obj: $(OUTDIR) mbyte.c  $(INCL)
+$(OUTDIR)/mbyte.obj:	$(OUTDIR) mbyte.c  $(INCL)
 
-$(OUTDIR)/netbeans.obj: $(OUTDIR) netbeans.c $(NBDEBUG_SRC) $(INCL) version.h
+$(OUTDIR)/netbeans.obj:	$(OUTDIR) netbeans.c $(NBDEBUG_SRC) $(INCL) version.h
 
-$(OUTDIR)/channel.obj: $(OUTDIR) channel.c $(INCL)
+$(OUTDIR)/channel.obj:	$(OUTDIR) channel.c $(INCL)
 
 $(OUTDIR)/normal.obj:	$(OUTDIR) normal.c  $(INCL)
 

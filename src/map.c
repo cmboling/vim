@@ -1639,8 +1639,7 @@ eval_map_expr(
  * Returns NULL when out of memory.
  */
     char_u *
-vim_strsave_escape_csi(
-    char_u *p)
+vim_strsave_escape_csi(char_u *p)
 {
     char_u	*res;
     char_u	*s, *d;
@@ -2304,8 +2303,10 @@ f_mapset(typval_T *argvars, typval_T *rettv UNUSED)
     char_u	*arg;
 
     which = tv_get_string_buf_chk(&argvars[0], buf);
+    if (which == NULL)
+	return;
     mode = get_map_mode(&which, 0);
-    is_abbr = (int)tv_get_number(&argvars[1]);
+    is_abbr = (int)tv_get_bool(&argvars[1]);
 
     if (argvars[2].v_type != VAR_DICT)
     {

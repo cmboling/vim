@@ -624,21 +624,11 @@ f_getbufinfo(typval_T *argvars, typval_T *rettv)
 
 	if (sel_d != NULL)
 	{
-	    dictitem_T	*di;
-
 	    filtered = TRUE;
-
-	    di = dict_find(sel_d, (char_u *)"buflisted", -1);
-	    if (di != NULL && tv_get_number(&di->di_tv))
-		sel_buflisted = TRUE;
-
-	    di = dict_find(sel_d, (char_u *)"bufloaded", -1);
-	    if (di != NULL && tv_get_number(&di->di_tv))
-		sel_bufloaded = TRUE;
-
-	    di = dict_find(sel_d, (char_u *)"bufmodified", -1);
-	    if (di != NULL && tv_get_number(&di->di_tv))
-		sel_bufmodified = TRUE;
+	    sel_buflisted = dict_get_bool(sel_d, (char_u *)"buflisted", FALSE);
+	    sel_bufloaded = dict_get_bool(sel_d, (char_u *)"bufloaded", FALSE);
+	    sel_bufmodified = dict_get_bool(sel_d, (char_u *)"bufmodified",
+									FALSE);
 	}
     }
     else if (argvars[0].v_type != VAR_UNKNOWN)
@@ -727,17 +717,19 @@ get_buffer_lines(
     void
 f_getbufline(typval_T *argvars, typval_T *rettv)
 {
-    linenr_T	lnum;
-    linenr_T	end;
+    linenr_T	lnum = 1;
+    linenr_T	end = 1;
     buf_T	*buf;
 
     buf = tv_get_buf_from_arg(&argvars[0]);
-
-    lnum = tv_get_lnum_buf(&argvars[1], buf);
-    if (argvars[2].v_type == VAR_UNKNOWN)
-	end = lnum;
-    else
-	end = tv_get_lnum_buf(&argvars[2], buf);
+    if (buf != NULL)
+    {
+	lnum = tv_get_lnum_buf(&argvars[1], buf);
+	if (argvars[2].v_type == VAR_UNKNOWN)
+	    end = lnum;
+	else
+	    end = tv_get_lnum_buf(&argvars[2], buf);
+    }
 
     get_buffer_lines(buf, lnum, end, TRUE, rettv);
 }

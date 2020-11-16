@@ -871,7 +871,7 @@ OBJ += $(OUTDIR)/netbeans.o
 endif
 
 ifeq ($(CHANNEL),yes)
-OBJ += $(OUTDIR)/channel.o
+OBJ += $(OUTDIR)/job.o $(OUTDIR)/channel.o
 LIB += -lwsock32 -lws2_32
 endif
 
@@ -1055,6 +1055,12 @@ install.exe: dosinst.c dosinst.h version.h
 
 uninstall.exe: uninstall.c dosinst.h version.h
 	$(CC) $(CFLAGS) -o uninstall.exe uninstall.c $(LIB) -lole32
+
+$(OBJ): $(OUTDIR)
+
+$(EXEOBJG): $(OUTDIR)
+
+$(EXEOBJC): $(OUTDIR)
 
 ifeq ($(VIMDLL),yes)
 $(TARGET): $(OUTDIR) $(OBJ)
@@ -1281,7 +1287,7 @@ $(OUTDIR)/%.o : xdiff/%.c $(XDIFF_DEPS)
 	$(CC) -c $(CFLAGS) $< -o $@
 
 
-$(PATHDEF_SRC): Make_cyg_ming.mak Make_cyg.mak Make_ming.mak
+$(PATHDEF_SRC): $(OUTDIR) Make_cyg_ming.mak Make_cyg.mak Make_ming.mak
 ifneq (sh.exe, $(SHELL))
 	@echo creating $(PATHDEF_SRC)
 	@echo '/* pathdef.c */' > $(PATHDEF_SRC)

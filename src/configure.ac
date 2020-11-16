@@ -880,6 +880,9 @@ if test "$enable_mzschemeinterp" = "yes"; then
 	  MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
 	elif test -f "${path}/libracket3m.a"; then
 	  MZSCHEME_LIBS="${path}/libracket3m.a"
+	  if test -f "${path}/librktio.a"; then
+	    MZSCHEME_LIBS="${MZSCHEME_LIBS} ${path}/librktio.a"
+	  fi
 	  MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
 	elif test -f "${path}/libracket.a"; then
 	  MZSCHEME_LIBS="${path}/libracket.a ${path}/libmzgc.a"
@@ -2143,9 +2146,9 @@ if test "$enable_netbeans" = "yes"; then
 fi
 if test "$enable_channel" = "yes"; then
   AC_DEFINE(FEAT_JOB_CHANNEL)
-  CHANNEL_SRC="channel.c"
+  CHANNEL_SRC="job.c channel.c"
   AC_SUBST(CHANNEL_SRC)
-  CHANNEL_OBJ="objects/channel.o"
+  CHANNEL_OBJ="objects/job.o objects/channel.o"
   AC_SUBST(CHANNEL_OBJ)
 fi
 
