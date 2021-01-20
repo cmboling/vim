@@ -4,8 +4,7 @@ PREFIX=$PRG/vim
 
 ./configure \
    --with-features=huge \
-   --enable-pythoninterp=yes \
-   --enable-python3interp=yes \
+   --enable-python3interp=dynamic \
    --enable-perlinterp=yes \
    --enable-gui=gtk2 \
    --enable-cscope \
